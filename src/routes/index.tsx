@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { X, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, Search, Settings as SettingsIcon, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -46,6 +46,8 @@ const SOURCES: { name: string; status: "정상" | "Delayed" | "오류" }[] = [
   { name: "EUDAMED", status: "정상" },
 ];
 
+const API_KEY_STORAGE = "ivd_claude_api_key";
+
 const urgencyColor = (u: Item["urgency"]) =>
   u === "High" ? "#ef4444" : u === "Medium" ? "#f59e0b" : "#64748b";
 const urgencyLabel = (u: Item["urgency"]) =>
@@ -58,11 +60,69 @@ const regionPill = (r: Item["region"]) => {
 const statusDot = (s: string) =>
   s === "정상" ? "bg-green-500" : s === "Delayed" ? "bg-amber-500" : "bg-red-500";
 
+async function callClaude(apiKey: string, item: Item): Promise<{ summary: string; ra_action: string }> {
+  const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
+제목: ${item.title}
+기관: ${item.agency}
+유형: ${item.type}
+지역: ${item.region}
+
+다음 JSON 형식으로만 응답하라 (다른 텍스트 없이):
+{"summary": "핵심 내용 100자 이내 요약", "ra_action": "자사 IVD 제품 대응 조치 1~3줄"}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  const text = data?.content?.[0]?.text ?? "";
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("parse");
+  return JSON.parse(match[0]);
+}
+
 function Index() {
   const [regions, setRegions] = useState<Set<string>>(new Set(REGIONS));
   const [types, setTypes] = useState<Set<string>>(new Set(DOC_TYPES));
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [hasKey, setHasKey] = useState(false);
+
+  const [aiResult, setAiResult] = useState<{ summary: string; ra_action: string } | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
+
+  useEffect(() => {
+    const k = localStorage.getItem(API_KEY_STORAGE) || "";
+    setApiKey(k);
+    setHasKey(!!k);
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    setAiResult(null);
+    setAiError(false);
+    const stored = localStorage.getItem(API_KEY_STORAGE);
+    if (!stored) return;
+    setAiLoading(true);
+    callClaude(stored, selected)
+      .then((r) => setAiResult(r))
+      .catch(() => setAiError(true))
+      .finally(() => setAiLoading(false));
+  }, [selected]);
 
   const toggle = (set: Set<string>, val: string, setter: (s: Set<string>) => void) => {
     const next = new Set(set);
@@ -134,7 +194,7 @@ function Index() {
           </div>
         </div>
 
-        <div className="p-5 mt-auto">
+        <div className="p-5">
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
             소스 상태
           </h2>
@@ -147,6 +207,22 @@ function Index() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="mt-auto p-5 border-t border-slate-800 space-y-3">
+          <div className="flex items-center gap-2 text-xs">
+            <span className={`w-2 h-2 rounded-full ${hasKey ? "bg-green-500" : "bg-slate-500"}`} />
+            <span className={hasKey ? "text-slate-200" : "text-slate-400"}>
+              {hasKey ? "API 연결됨" : "API 미설정"}
+            </span>
+          </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-2 text-sm text-slate-300 hover:text-white w-full"
+          >
+            <SettingsIcon className="w-4 h-4" />
+            설정
+          </button>
         </div>
       </aside>
 
@@ -225,25 +301,27 @@ function Index() {
                 </span>
               </div>
 
-              <div
-                className="mt-5 p-4 rounded-md border-l-4"
-                style={{ backgroundColor: "#1e1b4b", borderLeftColor: "#6366f1" }}
-              >
-                <div className="text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2">
-                  AI 요약
-                </div>
-                <p className="text-sm text-slate-100 leading-relaxed">{selected.summary}</p>
-              </div>
+              <DetailBox
+                label="AI 요약"
+                labelClass="text-indigo-300"
+                bg="#1e1b4b"
+                border="#6366f1"
+                hasKey={hasKey}
+                loading={aiLoading}
+                error={aiError}
+                content={aiResult?.summary}
+              />
 
-              <div
-                className="mt-3 p-4 rounded-md border-l-4"
-                style={{ backgroundColor: "#1a1200", borderLeftColor: "#f59e0b" }}
-              >
-                <div className="text-xs font-semibold text-amber-300 uppercase tracking-wider mb-2">
-                  RA Action
-                </div>
-                <p className="text-sm text-slate-100 leading-relaxed">{selected.ra_action}</p>
-              </div>
+              <DetailBox
+                label="RA ACTION"
+                labelClass="text-amber-300"
+                bg="#1a1200"
+                border="#f59e0b"
+                hasKey={hasKey}
+                loading={aiLoading}
+                error={aiError}
+                content={aiResult?.ra_action}
+              />
 
               <div className="mt-5">
                 <h4 className="text-sm font-semibold text-white mb-2">자사 영향 검토 포인트</h4>
@@ -266,7 +344,154 @@ function Index() {
           </div>
         </>
       )}
+
+      {/* SETTINGS MODAL */}
+      {settingsOpen && (
+        <SettingsModal
+          initialKey={apiKey}
+          onClose={() => setSettingsOpen(false)}
+          onSave={(k) => {
+            localStorage.setItem(API_KEY_STORAGE, k);
+            setApiKey(k);
+            setHasKey(!!k);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function DetailBox({
+  label, labelClass, bg, border, hasKey, loading, error, content,
+}: {
+  label: string; labelClass: string; bg: string; border: string;
+  hasKey: boolean; loading: boolean; error: boolean; content?: string;
+}) {
+  return (
+    <div
+      className="mt-5 p-4 rounded-md border-l-4 min-h-[80px]"
+      style={{ backgroundColor: bg, borderLeftColor: border }}
+    >
+      <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelClass}`}>
+        {label}
+      </div>
+      {!hasKey ? (
+        <p className="text-sm text-slate-400 italic text-center py-2">
+          Claude API 키를 설정하면 AI 요약 및 RA Action 기능을 사용할 수 있습니다
+        </p>
+      ) : loading ? (
+        <div className="flex items-center justify-center py-3">
+          <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
+        </div>
+      ) : error ? (
+        <p className="text-sm text-red-400">요약 생성 중 오류가 발생했습니다. API 키를 확인해 주세요.</p>
+      ) : (
+        <p className="text-sm text-slate-100 leading-relaxed">{content}</p>
+      )}
+    </div>
+  );
+}
+
+function SettingsModal({
+  initialKey, onClose, onSave,
+}: { initialKey: string; onClose: () => void; onSave: (k: string) => void }) {
+  const [val, setVal] = useState(initialKey);
+  const [show, setShow] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<null | "ok" | "fail">(null);
+
+  const test = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": val,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 8,
+          messages: [{ role: "user", content: "ping" }],
+        }),
+      });
+      setTestResult(res.ok ? "ok" : "fail");
+    } catch {
+      setTestResult("fail");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
+      <div
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] z-50 rounded-lg border border-slate-700 p-6"
+        style={{ backgroundColor: "#0f172a" }}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-semibold text-white">설정</h3>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-slate-800 text-slate-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <label className="block text-sm text-slate-200 mb-2">Claude API Key</label>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type={show ? "text" : "password"}
+              value={val}
+              onChange={(e) => { setVal(e.target.value); setTestResult(null); }}
+              placeholder="sk-ant-..."
+              className="w-full pl-3 pr-10 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              style={{ backgroundColor: "#111827" }}
+            />
+            <button
+              type="button"
+              onClick={() => setShow((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200"
+            >
+              {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <button
+            onClick={test}
+            disabled={!val || testing}
+            className="px-3 py-2 text-sm rounded-md border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {testing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            테스트
+          </button>
+        </div>
+
+        {testResult === "ok" && (
+          <p className="mt-2 text-sm text-green-400">유효한 키입니다 ✓</p>
+        )}
+        {testResult === "fail" && (
+          <p className="mt-2 text-sm text-red-400">유효하지 않은 키입니다 ✗</p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => { onSave(val.trim()); onClose(); }}
+            className="px-4 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
+          >
+            저장
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
