@@ -47,6 +47,8 @@ const SOURCES: { name: string; status: "정상" | "Delayed" | "오류" }[] = [
 ];
 
 const API_KEY_STORAGE = "ivd_claude_api_key";
+const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
+const AIRTABLE_TOKEN_STORAGE = "ivd_airtable_token";
 
 const urgencyColor = (u: Item["urgency"]) =>
   u === "High" ? "#ef4444" : u === "Medium" ? "#f59e0b" : "#64748b";
@@ -92,6 +94,36 @@ async function callClaude(apiKey: string, item: Item): Promise<{ summary: string
   return JSON.parse(match[0]);
 }
 
+type AirtableRecord = {
+  id: string;
+  fields: Partial<{
+    title: string; source_url: string; date: string; agency: string;
+    region: string; type: string; tag: string; urgency: string;
+    summary: string; ra_action: string; is_new: boolean;
+  }>;
+};
+
+async function fetchAirtable(baseId: string, token: string): Promise<Item[]> {
+  const url = `https://api.airtable.com/v0/${baseId}/regulatory_updates?sort%5B0%5D%5Bfield%5D=date&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Airtable ${res.status}`);
+  const data = (await res.json()) as { records: AirtableRecord[] };
+  return data.records.map((r) => ({
+    id: r.id,
+    region: (r.fields.region as Item["region"]) || "MDSAP",
+    agency: r.fields.agency || "",
+    date: r.fields.date || "",
+    tag: r.fields.tag || "",
+    type: r.fields.type || "Guidance",
+    urgency: (r.fields.urgency as Item["urgency"]) || "Low",
+    title: r.fields.title || "",
+    summary: r.fields.summary || "",
+    ra_action: r.fields.ra_action || "",
+    source_url: r.fields.source_url || "",
+    is_new: !!r.fields.is_new,
+  }));
+}
+
 function Index() {
   const [regions, setRegions] = useState<Set<string>>(new Set(REGIONS));
   const [types, setTypes] = useState<Set<string>>(new Set(DOC_TYPES));
@@ -100,21 +132,56 @@ function Index() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState<string>("");
   const [hasKey, setHasKey] = useState(false);
+  const [airtableBase, setAirtableBase] = useState("");
+  const [airtableToken, setAirtableToken] = useState("");
+  const [airtableConnected, setAirtableConnected] = useState(false);
+
+  const [data, setData] = useState<Item[]>(mockData);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [usingMock, setUsingMock] = useState(true);
 
   const [aiResult, setAiResult] = useState<{ summary: string; ra_action: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
 
+  const loadAirtable = (base: string, token: string) => {
+    if (!base || !token) {
+      setData(mockData);
+      setUsingMock(true);
+      return;
+    }
+    setDataLoading(true);
+    fetchAirtable(base, token)
+      .then((rows) => {
+        setData(rows.length ? rows : mockData);
+        setUsingMock(rows.length === 0);
+      })
+      .catch(() => {
+        setData(mockData);
+        setUsingMock(true);
+      })
+      .finally(() => setDataLoading(false));
+  };
+
   useEffect(() => {
     const k = localStorage.getItem(API_KEY_STORAGE) || "";
-    setApiKey(k);
-    setHasKey(!!k);
+    const b = localStorage.getItem(AIRTABLE_BASE_STORAGE) || "";
+    const t = localStorage.getItem(AIRTABLE_TOKEN_STORAGE) || "";
+    setApiKey(k); setHasKey(!!k);
+    setAirtableBase(b); setAirtableToken(t);
+    setAirtableConnected(!!(b && t));
+    loadAirtable(b, t);
   }, []);
 
   useEffect(() => {
     if (!selected) return;
     setAiResult(null);
     setAiError(false);
+    // If Airtable already provided a summary, prefer it without calling Claude
+    if (selected.summary && selected.ra_action) {
+      setAiResult({ summary: selected.summary, ra_action: selected.ra_action });
+      return;
+    }
     const stored = localStorage.getItem(API_KEY_STORAGE);
     if (!stored) return;
     setAiLoading(true);
@@ -132,17 +199,18 @@ function Index() {
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
-    return mockData.filter(
+    return data.filter(
       (d) =>
         regions.has(d.region) &&
         types.has(d.type) &&
         (!q || d.title.toLowerCase().includes(q) || d.summary.toLowerCase().includes(q))
     );
-  }, [regions, types, query]);
+  }, [data, regions, types, query]);
 
-  const todayCount = mockData.filter((d) => d.date === "2026-05-15").length;
-  const highCount = mockData.filter((d) => d.urgency === "High").length;
-  const unreadCount = mockData.filter((d) => d.is_new).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = data.filter((d) => d.date === today).length;
+  const highCount = data.filter((d) => d.urgency === "High").length;
+  const unreadCount = data.filter((d) => d.is_new).length;
 
   return (
     <div className="flex min-h-screen text-slate-100" style={{ backgroundColor: "#0b1120" }}>
@@ -157,18 +225,11 @@ function Index() {
         </div>
 
         <div className="p-5 border-b border-slate-800">
-          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
-            지역 필터
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">지역 필터</h2>
           <div className="space-y-2">
             {REGIONS.map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={regions.has(r)}
-                  onChange={() => toggle(regions, r, setRegions)}
-                  className="accent-indigo-500"
-                />
+                <input type="checkbox" checked={regions.has(r)} onChange={() => toggle(regions, r, setRegions)} className="accent-indigo-500" />
                 {r}
               </label>
             ))}
@@ -176,18 +237,11 @@ function Index() {
         </div>
 
         <div className="p-5 border-b border-slate-800">
-          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
-            문서 유형
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">문서 유형</h2>
           <div className="space-y-2">
             {DOC_TYPES.map((t) => (
               <label key={t} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={types.has(t)}
-                  onChange={() => toggle(types, t, setTypes)}
-                  className="accent-indigo-500"
-                />
+                <input type="checkbox" checked={types.has(t)} onChange={() => toggle(types, t, setTypes)} className="accent-indigo-500" />
                 {t}
               </label>
             ))}
@@ -195,9 +249,7 @@ function Index() {
         </div>
 
         <div className="p-5">
-          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
-            소스 상태
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">소스 상태</h2>
           <div className="space-y-2">
             {SOURCES.map((s) => (
               <div key={s.name} className="flex items-center gap-2 text-xs">
@@ -212,9 +264,11 @@ function Index() {
         <div className="mt-auto p-5 border-t border-slate-800 space-y-3">
           <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${hasKey ? "bg-green-500" : "bg-slate-500"}`} />
-            <span className={hasKey ? "text-slate-200" : "text-slate-400"}>
-              {hasKey ? "API 연결됨" : "API 미설정"}
-            </span>
+            <span className={hasKey ? "text-slate-200" : "text-slate-400"}>{hasKey ? "API 연결됨" : "API 미설정"}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className={`w-2 h-2 rounded-full ${airtableConnected ? "bg-green-500" : "bg-slate-500"}`} />
+            <span className={airtableConnected ? "text-slate-200" : "text-slate-400"}>{airtableConnected ? "Airtable 연결됨" : "Airtable 미설정"}</span>
           </div>
           <button
             onClick={() => setSettingsOpen(true)}
@@ -230,9 +284,7 @@ function Index() {
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="px-8 py-5 border-b border-slate-800 flex items-center gap-4">
           <h2 className="text-xl font-semibold text-white">최신 규제 업데이트</h2>
-          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs">
-            {filtered.length}
-          </span>
+          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs">{filtered.length}</span>
           <div className="ml-auto relative w-72">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -245,6 +297,12 @@ function Index() {
           </div>
         </div>
 
+        {usingMock && (
+          <div className="mx-8 mt-4 px-4 py-2.5 rounded-md text-xs text-amber-200 border" style={{ backgroundColor: "#1a1200", borderColor: "#f59e0b" }}>
+            설정에서 Airtable을 연결하면 실데이터가 표시됩니다.
+          </div>
+        )}
+
         <div className="px-8 pt-5 grid grid-cols-4 gap-3">
           <MetricCard label="오늘 수집" value={String(todayCount)} />
           <MetricCard label="이번 주 High" value={String(highCount)} accent="#ef4444" />
@@ -253,11 +311,23 @@ function Index() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-5 space-y-3">
-          {filtered.map((item) => (
-            <Card key={item.id} item={item} onClick={() => setSelected(item)} />
-          ))}
-          {filtered.length === 0 && (
-            <div className="text-center text-slate-500 py-12 text-sm">조건에 맞는 업데이트가 없습니다.</div>
+          {dataLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-lg p-4 border border-slate-800 animate-pulse" style={{ backgroundColor: "#111827" }}>
+                <div className="h-3 w-32 bg-slate-700 rounded mb-3" />
+                <div className="h-4 w-3/4 bg-slate-700 rounded mb-2" />
+                <div className="h-3 w-1/2 bg-slate-800 rounded" />
+              </div>
+            ))
+          ) : (
+            <>
+              {filtered.map((item) => (
+                <Card key={item.id} item={item} onClick={() => setSelected(item)} />
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-center text-slate-500 py-12 text-sm">조건에 맞는 업데이트가 없습니다.</div>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -265,63 +335,29 @@ function Index() {
       {/* SLIDE OVER */}
       {selected && (
         <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setSelected(null)}
-          />
-          <div
-            className="fixed right-0 top-0 h-full w-[480px] z-50 overflow-y-auto border-l border-slate-800"
-            style={{ backgroundColor: "#0f172a" }}
-          >
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSelected(null)} />
+          <div className="fixed right-0 top-0 h-full w-[480px] z-50 overflow-y-auto border-l border-slate-800" style={{ backgroundColor: "#0f172a" }}>
             <div className="p-6">
-              <button
-                onClick={() => setSelected(null)}
-                className="absolute top-4 right-4 p-2 rounded-md hover:bg-slate-800 text-slate-400"
-              >
+              <button onClick={() => setSelected(null)} className="absolute top-4 right-4 p-2 rounded-md hover:bg-slate-800 text-slate-400">
                 <X className="w-5 h-5" />
               </button>
 
-              <h3 className="text-xl font-semibold text-white pr-10 leading-snug">
-                {selected.title}
-              </h3>
+              <h3 className="text-xl font-semibold text-white pr-10 leading-snug">{selected.title}</h3>
 
               <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-200">
-                  {selected.agency}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full ${regionPill(selected.region)}`}>
-                  {selected.region}
-                </span>
+                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-200">{selected.agency}</span>
+                <span className={`px-2 py-0.5 rounded-full ${regionPill(selected.region)}`}>{selected.region}</span>
                 <span className="text-slate-400">{selected.date}</span>
-                <span
-                  className="px-2 py-0.5 rounded-full text-white font-semibold ml-auto"
-                  style={{ backgroundColor: urgencyColor(selected.urgency) }}
-                >
+                <span className="px-2 py-0.5 rounded-full text-white font-semibold ml-auto" style={{ backgroundColor: urgencyColor(selected.urgency) }}>
                   {urgencyLabel(selected.urgency)}
                 </span>
               </div>
 
-              <DetailBox
-                label="AI 요약"
-                labelClass="text-indigo-300"
-                bg="#1e1b4b"
-                border="#6366f1"
-                hasKey={hasKey}
-                loading={aiLoading}
-                error={aiError}
-                content={aiResult?.summary}
-              />
+              <DetailBox label="AI 요약" labelClass="text-indigo-300" bg="#1e1b4b" border="#6366f1"
+                hasKey={hasKey || !!selected.summary} loading={aiLoading} error={aiError} content={aiResult?.summary} />
 
-              <DetailBox
-                label="RA ACTION"
-                labelClass="text-amber-300"
-                bg="#1a1200"
-                border="#f59e0b"
-                hasKey={hasKey}
-                loading={aiLoading}
-                error={aiError}
-                content={aiResult?.ra_action}
-              />
+              <DetailBox label="RA ACTION" labelClass="text-amber-300" bg="#1a1200" border="#f59e0b"
+                hasKey={hasKey || !!selected.ra_action} loading={aiLoading} error={aiError} content={aiResult?.ra_action} />
 
               <div className="mt-5">
                 <h4 className="text-sm font-semibold text-white mb-2">자사 영향 검토 포인트</h4>
@@ -332,12 +368,8 @@ function Index() {
                 </ul>
               </div>
 
-              <a
-                href={selected.source_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-6 inline-flex items-center justify-center w-full px-4 py-2.5 rounded-md border border-slate-600 text-slate-100 text-sm hover:bg-slate-800 transition"
-              >
+              <a href={selected.source_url} target="_blank" rel="noreferrer"
+                className="mt-6 inline-flex items-center justify-center w-full px-4 py-2.5 rounded-md border border-slate-600 text-slate-100 text-sm hover:bg-slate-800 transition">
                 원문 보기 →
               </a>
             </div>
@@ -349,11 +381,17 @@ function Index() {
       {settingsOpen && (
         <SettingsModal
           initialKey={apiKey}
+          initialBase={airtableBase}
+          initialToken={airtableToken}
           onClose={() => setSettingsOpen(false)}
-          onSave={(k) => {
+          onSave={(k, b, t) => {
             localStorage.setItem(API_KEY_STORAGE, k);
-            setApiKey(k);
-            setHasKey(!!k);
+            localStorage.setItem(AIRTABLE_BASE_STORAGE, b);
+            localStorage.setItem(AIRTABLE_TOKEN_STORAGE, t);
+            setApiKey(k); setHasKey(!!k);
+            setAirtableBase(b); setAirtableToken(t);
+            setAirtableConnected(!!(b && t));
+            loadAirtable(b, t);
           }}
         />
       )}
@@ -368,13 +406,8 @@ function DetailBox({
   hasKey: boolean; loading: boolean; error: boolean; content?: string;
 }) {
   return (
-    <div
-      className="mt-5 p-4 rounded-md border-l-4 min-h-[80px]"
-      style={{ backgroundColor: bg, borderLeftColor: border }}
-    >
-      <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelClass}`}>
-        {label}
-      </div>
+    <div className="mt-5 p-4 rounded-md border-l-4 min-h-[80px]" style={{ backgroundColor: bg, borderLeftColor: border }}>
+      <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelClass}`}>{label}</div>
       {!hasKey ? (
         <p className="text-sm text-slate-400 italic text-center py-2">
           Claude API 키를 설정하면 AI 요약 및 RA Action 기능을 사용할 수 있습니다
@@ -386,19 +419,28 @@ function DetailBox({
       ) : error ? (
         <p className="text-sm text-red-400">요약 생성 중 오류가 발생했습니다. API 키를 확인해 주세요.</p>
       ) : (
-        <p className="text-sm text-slate-100 leading-relaxed">{content}</p>
+        <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-line">{content}</p>
       )}
     </div>
   );
 }
 
 function SettingsModal({
-  initialKey, onClose, onSave,
-}: { initialKey: string; onClose: () => void; onSave: (k: string) => void }) {
+  initialKey, initialBase, initialToken, onClose, onSave,
+}: {
+  initialKey: string; initialBase: string; initialToken: string;
+  onClose: () => void; onSave: (k: string, b: string, t: string) => void;
+}) {
   const [val, setVal] = useState(initialKey);
+  const [base, setBase] = useState(initialBase);
+  const [token, setToken] = useState(initialToken);
   const [show, setShow] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<null | "ok" | "fail">(null);
+
+  const [collecting, setCollecting] = useState(false);
+  const [collectMsg, setCollectMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const test = async () => {
     setTesting(true);
@@ -412,11 +454,7 @@ function SettingsModal({
           "content-type": "application/json",
           "anthropic-dangerous-direct-browser-access": "true",
         },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 8,
-          messages: [{ role: "user", content: "ping" }],
-        }),
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 8, messages: [{ role: "user", content: "ping" }] }),
       });
       setTestResult(res.ok ? "ok" : "fail");
     } catch {
@@ -426,11 +464,38 @@ function SettingsModal({
     }
   };
 
+  const runCollect = async () => {
+    setCollecting(true);
+    setCollectMsg(null);
+    try {
+      const res = await fetch("/api/collect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-airtable-base-id": base,
+          "x-airtable-token": token,
+          "x-claude-api-key": val,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCollectMsg({ ok: false, text: `✗ 오류: ${data.error || res.statusText}` });
+      } else {
+        const errPart = data.errors?.length ? ` (오류 ${data.errors.length}건)` : "";
+        setCollectMsg({ ok: true, text: `✓ ${data.collected}건 수집 완료, ${data.skipped}건 중복 스킵${errPart}` });
+      }
+    } catch (e) {
+      setCollectMsg({ ok: false, text: `✗ 오류: ${(e as Error).message}` });
+    } finally {
+      setCollecting(false);
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
       <div
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] z-50 rounded-lg border border-slate-700 p-6"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-h-[90vh] overflow-y-auto z-50 rounded-lg border border-slate-700 p-6"
         style={{ backgroundColor: "#0f172a" }}
       >
         <div className="flex items-center justify-between mb-5">
@@ -451,42 +516,75 @@ function SettingsModal({
               className="w-full pl-3 pr-10 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
               style={{ backgroundColor: "#111827" }}
             />
-            <button
-              type="button"
-              onClick={() => setShow((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200"
-            >
+            <button type="button" onClick={() => setShow((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200">
               {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          <button
-            onClick={test}
-            disabled={!val || testing}
-            className="px-3 py-2 text-sm rounded-md border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5"
-          >
+          <button onClick={test} disabled={!val || testing}
+            className="px-3 py-2 text-sm rounded-md border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
             {testing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             테스트
           </button>
         </div>
+        {testResult === "ok" && <p className="mt-2 text-sm text-green-400">유효한 키입니다 ✓</p>}
+        {testResult === "fail" && <p className="mt-2 text-sm text-red-400">유효하지 않은 키입니다 ✗</p>}
 
-        {testResult === "ok" && (
-          <p className="mt-2 text-sm text-green-400">유효한 키입니다 ✓</p>
-        )}
-        {testResult === "fail" && (
-          <p className="mt-2 text-sm text-red-400">유효하지 않은 키입니다 ✗</p>
-        )}
+        <div className="mt-6 pt-6 border-t border-slate-800">
+          <h4 className="text-sm font-semibold text-white mb-4">데이터 수집 설정</h4>
+
+          <label className="block text-sm text-slate-200 mb-2">Airtable Base ID</label>
+          <input
+            type="text"
+            value={base}
+            onChange={(e) => setBase(e.target.value)}
+            placeholder="appXXXXXXXXXXXXXX"
+            className="w-full px-3 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+            style={{ backgroundColor: "#111827" }}
+          />
+
+          <label className="block text-sm text-slate-200 mb-2 mt-4">Airtable API Token</label>
+          <div className="relative">
+            <input
+              type={showToken ? "text" : "password"}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="pat..."
+              className="w-full pl-3 pr-10 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              style={{ backgroundColor: "#111827" }}
+            />
+            <button type="button" onClick={() => setShowToken((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200">
+              {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+
+          <button
+            onClick={runCollect}
+            disabled={collecting || !val || !base || !token}
+            className="mt-4 w-full px-4 py-2.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {collecting && <Loader2 className="w-4 h-4 animate-spin" />}
+            지금 수집 실행
+          </button>
+
+          {collectMsg && (
+            <p className={`mt-3 text-sm ${collectMsg.ok ? "text-green-400" : "text-red-400"}`}>{collectMsg.text}</p>
+          )}
+
+          <div className="mt-4 flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-slate-300">자동 수집: 매일 오전 7시 (KST)</span>
+          </div>
+        </div>
 
         <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800"
-          >
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800">
             취소
           </button>
-          <button
-            onClick={() => { onSave(val.trim()); onClose(); }}
-            className="px-4 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
-          >
+          <button onClick={() => { onSave(val.trim(), base.trim(), token.trim()); onClose(); }}
+            className="px-4 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
             저장
           </button>
         </div>
@@ -497,13 +595,8 @@ function SettingsModal({
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <div
-      className="rounded-lg p-4 border border-slate-800"
-      style={{ backgroundColor: "#111827" }}
-    >
-      <div className="text-2xl font-bold" style={{ color: accent ?? "#f8fafc" }}>
-        {value}
-      </div>
+    <div className="rounded-lg p-4 border border-slate-800" style={{ backgroundColor: "#111827" }}>
+      <div className="text-2xl font-bold" style={{ color: accent ?? "#f8fafc" }}>{value}</div>
       <div className="text-xs text-slate-400 mt-1">{label}</div>
     </div>
   );
@@ -516,29 +609,19 @@ function Card({ item, onClick }: { item: Item; onClick: () => void }) {
       className="relative rounded-lg p-4 pl-5 cursor-pointer hover:bg-slate-800/60 transition border border-slate-800"
       style={{ backgroundColor: "#111827" }}
     >
-      <span
-        className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
-        style={{ backgroundColor: urgencyColor(item.urgency) }}
-      />
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ backgroundColor: urgencyColor(item.urgency) }} />
       {item.is_new && (
-        <span
-          className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-xs font-bold"
-          style={{ color: "#22c55e", backgroundColor: "#052e16" }}
-        >
+        <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-xs font-bold" style={{ color: "#22c55e", backgroundColor: "#052e16" }}>
           NEW
         </span>
       )}
       <div className="flex items-center gap-2 text-xs text-slate-400">
         <span>{item.agency}</span>
         <span>·</span>
-        <span className={`px-2 py-0.5 rounded-full ${regionPill(item.region)}`}>
-          {item.region}
-        </span>
+        <span className={`px-2 py-0.5 rounded-full ${regionPill(item.region)}`}>{item.region}</span>
       </div>
       <div className="mt-2">
-        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
-          {item.type}
-        </span>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{item.type}</span>
       </div>
       <h3 className="mt-2 text-sm font-medium text-white line-clamp-2 pr-16">{item.title}</h3>
       <p className="mt-1 text-xs text-slate-400 line-clamp-1">{item.summary}</p>
