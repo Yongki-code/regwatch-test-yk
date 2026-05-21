@@ -133,9 +133,9 @@ export const Route = createFileRoute("/api/collect")({
         const token = request.headers.get("x-airtable-token") || process.env.AIRTABLE_TOKEN || "";
         const claudeKey = request.headers.get("x-claude-api-key") || process.env.CLAUDE_API_KEY || "";
 
-        if (!baseId || !token || !claudeKey) {
+        if (!baseId || !token) {
           return new Response(
-            JSON.stringify({ success: false, error: "Missing credentials (Airtable Base ID / Token / Claude API Key)" }),
+            JSON.stringify({ success: false, error: "Missing credentials (Airtable Base ID / Token)" }),
             { status: 400, headers: { "Content-Type": "application/json", ...CORS } },
           );
         }
