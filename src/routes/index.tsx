@@ -562,7 +562,7 @@ function SettingsModal({
 
           <button
             onClick={runCollect}
-            disabled={collecting || !val || !base || !token}
+            disabled={collecting || !base || !token}
             className="mt-4 w-full px-4 py-2.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {collecting && <Loader2 className="w-4 h-4 animate-spin" />}
