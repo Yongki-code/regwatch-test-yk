@@ -158,7 +158,15 @@ export const Route = createFileRoute("/api/collect")({
                 const exists = await airtableExists(baseId, token, it.link);
                 if (exists) { skipped++; continue; }
 
-                const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
+                let summary = "";
+                let ra_action = "";
+                let urgency = "";
+                if (claudeKey) {
+                  const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
+                  summary = ai.summary;
+                  ra_action = ai.ra_action;
+                  urgency = ai.urgency;
+                }
                 await airtableCreate(baseId, token, {
                   title: it.title,
                   source_url: it.link,
@@ -167,13 +175,13 @@ export const Route = createFileRoute("/api/collect")({
                   region: src.region,
                   type: src.type,
                   tag: src.type,
-                  urgency: ai.urgency,
-                  summary: ai.summary,
-                  ra_action: ai.ra_action,
+                  urgency,
+                  summary,
+                  ra_action,
                   is_new: true,
                 });
                 collected++;
-                await sleep(1000);
+                if (claudeKey) await sleep(1000);
               } catch (e) {
                 errors.push(`${src.name} item: ${(e as Error).message}`);
               }
