@@ -207,7 +207,7 @@ export const Route = createFileRoute("/api/collect")({
         } catch (e) {
           return new Response(
             JSON.stringify({ success: false, error: (e as Error)?.message || String(e) }),
-            { status: 200, headers: jsonHeaders },
+            { status: 500, headers: { "Content-Type": "application/json", ...CORS } },
           );
         }
       },
