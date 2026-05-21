@@ -129,72 +129,87 @@ export const Route = createFileRoute("/api/collect")({
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
       POST: async ({ request }) => {
-        const baseId = request.headers.get("x-airtable-base-id") || process.env.AIRTABLE_BASE_ID || "";
-        const token = request.headers.get("x-airtable-token") || process.env.AIRTABLE_TOKEN || "";
-        const claudeKey = request.headers.get("x-claude-api-key") || process.env.CLAUDE_API_KEY || "";
+        const jsonHeaders = { "Content-Type": "application/json", ...CORS };
+        try {
+          if (request.headers.get("x-test") === "1") {
+            return new Response(JSON.stringify({ success: true, test: "ok" }), {
+              status: 200,
+              headers: jsonHeaders,
+            });
+          }
 
-        if (!baseId || !token) {
+          const baseId = request.headers.get("x-airtable-base-id") || process.env.AIRTABLE_BASE_ID || "";
+          const token = request.headers.get("x-airtable-token") || process.env.AIRTABLE_TOKEN || "";
+          const claudeKey = request.headers.get("x-claude-api-key") || process.env.CLAUDE_API_KEY || "";
+
+          if (!baseId || !token) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Missing credentials (Airtable Base ID / Token)" }),
+              { status: 400, headers: jsonHeaders },
+            );
+          }
+
+          let collected = 0;
+          let skipped = 0;
+          const errors: string[] = [];
+
+          for (const src of SOURCES) {
+            try {
+              const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
+              if (!r.ok) {
+                errors.push(`${src.name}: fetch ${r.status}`);
+                continue;
+              }
+              const xml = await r.text();
+              const items = parseFeed(xml).slice(0, 10); // cap per source
+              for (const it of items) {
+                try {
+                  const exists = await airtableExists(baseId, token, it.link);
+                  if (exists) { skipped++; continue; }
+
+                  let summary = "";
+                  let ra_action = "";
+                  let urgency = "";
+                  if (claudeKey) {
+                    const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
+                    summary = ai.summary;
+                    ra_action = ai.ra_action;
+                    urgency = ai.urgency;
+                  }
+                  await airtableCreate(baseId, token, {
+                    title: it.title,
+                    source_url: it.link,
+                    date: isoDate(it.pubDate),
+                    agency: src.agency,
+                    region: src.region,
+                    type: src.type,
+                    tag: src.type,
+                    urgency,
+                    summary,
+                    ra_action,
+                    is_new: true,
+                  });
+                  collected++;
+                  if (claudeKey) await sleep(1000);
+                } catch (e) {
+                  errors.push(`${src.name} item: ${(e as Error).message}`);
+                }
+              }
+            } catch (e) {
+              errors.push(`${src.name}: ${(e as Error).message}`);
+            }
+          }
+
+          return new Response(JSON.stringify({ success: true, collected, skipped, errors }), {
+            status: 200,
+            headers: jsonHeaders,
+          });
+        } catch (e) {
           return new Response(
-            JSON.stringify({ success: false, error: "Missing credentials (Airtable Base ID / Token)" }),
-            { status: 400, headers: { "Content-Type": "application/json", ...CORS } },
+            JSON.stringify({ success: false, error: (e as Error)?.message || String(e) }),
+            { status: 200, headers: jsonHeaders },
           );
         }
-
-        let collected = 0;
-        let skipped = 0;
-        const errors: string[] = [];
-
-        for (const src of SOURCES) {
-          try {
-            const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
-            if (!r.ok) {
-              errors.push(`${src.name}: fetch ${r.status}`);
-              continue;
-            }
-            const xml = await r.text();
-            const items = parseFeed(xml).slice(0, 10); // cap per source
-            for (const it of items) {
-              try {
-                const exists = await airtableExists(baseId, token, it.link);
-                if (exists) { skipped++; continue; }
-
-                let summary = "";
-                let ra_action = "";
-                let urgency = "";
-                if (claudeKey) {
-                  const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
-                  summary = ai.summary;
-                  ra_action = ai.ra_action;
-                  urgency = ai.urgency;
-                }
-                await airtableCreate(baseId, token, {
-                  title: it.title,
-                  source_url: it.link,
-                  date: isoDate(it.pubDate),
-                  agency: src.agency,
-                  region: src.region,
-                  type: src.type,
-                  tag: src.type,
-                  urgency,
-                  summary,
-                  ra_action,
-                  is_new: true,
-                });
-                collected++;
-                if (claudeKey) await sleep(1000);
-              } catch (e) {
-                errors.push(`${src.name} item: ${(e as Error).message}`);
-              }
-            }
-          } catch (e) {
-            errors.push(`${src.name}: ${(e as Error).message}`);
-          }
-        }
-
-        return new Response(JSON.stringify({ success: true, collected, skipped, errors }), {
-          status: 200,
-          headers: { "Content-Type": "application/json", ...CORS },
-        });
       },
     },
   },
