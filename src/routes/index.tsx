@@ -529,6 +529,7 @@ function SettingsModal({
         </div>
         {testResult === "ok" && <p className="mt-2 text-sm text-green-400">유효한 키입니다 ✓</p>}
         {testResult === "fail" && <p className="mt-2 text-sm text-red-400">유효하지 않은 키입니다 ✗</p>}
+        <p className="mt-2 text-xs text-slate-400">미입력 시 RSS 원문만 수집됩니다. 입력 시 AI 요약·RA Action·긴급도가 자동 생성됩니다.</p>
 
         <div className="mt-6 pt-6 border-t border-slate-800">
           <h4 className="text-sm font-semibold text-white mb-4">데이터 수집 설정</h4>
