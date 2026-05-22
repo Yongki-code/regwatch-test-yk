@@ -32,6 +32,46 @@ function isoDate(s: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+function decodeEntities(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+function pick(block: string, tag: string): string {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
+  const m = block.match(re);
+  return m ? decodeEntities(m[1]) : "";
+}
+
+function pickLink(block: string): string {
+  const a = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>(?:<\/link>)?/i);
+  if (a) return a[1];
+  const b = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
+  if (b) return decodeEntities(b[1]);
+  return "";
+}
+
+function parseFeed(xml: string): FeedItem[] {
+  const items: FeedItem[] = [];
+  const itemRe = /<item[\s>][\s\S]*?<\/item>/gi;
+  const entryRe = /<entry[\s>][\s\S]*?<\/entry>/gi;
+  const blocks = xml.match(itemRe) || xml.match(entryRe) || [];
+  for (const block of blocks) {
+    const title = pick(block, "title");
+    const link = pickLink(block);
+    const pubDate = pick(block, "pubDate") || pick(block, "updated") || pick(block, "published") || "";
+    if (title && link) items.push({ title, link, pubDate });
+  }
+  return items;
+}
+
 async function callClaude(apiKey: string, title: string, agency: string, isFda: boolean) {
   const ivdNote = isFda
     ? "\n\n주의: 이 항목이 IVD 또는 의료기기와 직접 관련 없으면 (예: 식품/약품) urgency를 'Low'로 설정하고 ra_action에 'IVD 직접 관련 없음 — 모니터링 유지'를 포함하라."
