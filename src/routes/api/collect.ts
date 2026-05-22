@@ -160,21 +160,14 @@ export const Route = createFileRoute("/api/collect")({
 
           for (const src of SOURCES) {
             try {
-              const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=10`;
-              const r = await fetch(proxyUrl);
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(src.url)}`;
+              const r = await fetch(proxyUrl, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
               if (!r.ok) {
                 errors.push(`${src.name}: proxy fetch ${r.status}`);
                 continue;
               }
-              const rssData = (await r.json()) as {
-                status: string;
-                items: { title: string; link: string; pubDate: string }[];
-              };
-              if (rssData.status !== "ok") {
-                errors.push(`${src.name}: rss2json error`);
-                continue;
-              }
-              const items: FeedItem[] = rssData.items.slice(0, 10);
+              const xml = await r.text();
+              const items = parseFeed(xml).slice(0, 10);
               for (const it of items) {
                 try {
                   const exists = await airtableExists(baseId, token, it.link);
