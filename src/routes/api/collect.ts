@@ -23,29 +23,6 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, x-airtable-base-id, x-airtable-token, x-claude-api-key",
 };
 
-function decodeEntities(s: string) {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
-}
-
-function pick(block: string, tag: string): string {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
-  const m = block.match(re);
-  return m ? decodeEntities(m[1]).trim() : "";
-}
-
-function pickLink(block: string): string {
-  // Atom: <link href="..."/>
-  const atom = block.match(/<link[^>]*href=["']([^"']+)["']/i);
-  if (atom) return atom[1];
-  return pick(block, "link");
-}
 
 type FeedItem = { title: string; link: string; pubDate: string };
 
