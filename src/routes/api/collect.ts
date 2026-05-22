@@ -23,43 +23,8 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, x-airtable-base-id, x-airtable-token, x-claude-api-key",
 };
 
-function decodeEntities(s: string) {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
-}
-
-function pick(block: string, tag: string): string {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
-  const m = block.match(re);
-  return m ? decodeEntities(m[1]).trim() : "";
-}
-
-function pickLink(block: string): string {
-  // Atom: <link href="..."/>
-  const atom = block.match(/<link[^>]*href=["']([^"']+)["']/i);
-  if (atom) return atom[1];
-  return pick(block, "link");
-}
 
 type FeedItem = { title: string; link: string; pubDate: string };
-
-function parseFeed(xml: string): FeedItem[] {
-  const items: FeedItem[] = [];
-  const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-  for (const b of blocks) {
-    const title = pick(b, "title");
-    const link = pickLink(b);
-    const pubDate = pick(b, "pubDate") || pick(b, "updated") || pick(b, "published") || new Date().toISOString();
-    if (title && link) items.push({ title, link, pubDate });
-  }
-  return items;
-}
 
 function isoDate(s: string): string {
   const d = new Date(s);
@@ -155,13 +120,21 @@ export const Route = createFileRoute("/api/collect")({
 
           for (const src of SOURCES) {
             try {
-              const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
+              const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=10`;
+              const r = await fetch(proxyUrl);
               if (!r.ok) {
-                errors.push(`${src.name}: fetch ${r.status}`);
+                errors.push(`${src.name}: proxy fetch ${r.status}`);
                 continue;
               }
-              const xml = await r.text();
-              const items = parseFeed(xml).slice(0, 10); // cap per source
+              const rssData = (await r.json()) as {
+                status: string;
+                items: { title: string; link: string; pubDate: string }[];
+              };
+              if (rssData.status !== "ok") {
+                errors.push(`${src.name}: rss2json error`);
+                continue;
+              }
+              const items: FeedItem[] = rssData.items.slice(0, 10);
               for (const it of items) {
                 try {
                   const exists = await airtableExists(baseId, token, it.link);
