@@ -49,18 +49,6 @@ function pickLink(block: string): string {
 
 type FeedItem = { title: string; link: string; pubDate: string };
 
-function parseFeed(xml: string): FeedItem[] {
-  const items: FeedItem[] = [];
-  const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-  for (const b of blocks) {
-    const title = pick(b, "title");
-    const link = pickLink(b);
-    const pubDate = pick(b, "pubDate") || pick(b, "updated") || pick(b, "published") || new Date().toISOString();
-    if (title && link) items.push({ title, link, pubDate });
-  }
-  return items;
-}
-
 function isoDate(s: string): string {
   const d = new Date(s);
   if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
@@ -155,13 +143,21 @@ export const Route = createFileRoute("/api/collect")({
 
           for (const src of SOURCES) {
             try {
-              const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
+              const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=10`;
+              const r = await fetch(proxyUrl);
               if (!r.ok) {
-                errors.push(`${src.name}: fetch ${r.status}`);
+                errors.push(`${src.name}: proxy fetch ${r.status}`);
                 continue;
               }
-              const xml = await r.text();
-              const items = parseFeed(xml).slice(0, 10); // cap per source
+              const rssData = (await r.json()) as {
+                status: string;
+                items: { title: string; link: string; pubDate: string }[];
+              };
+              if (rssData.status !== "ok") {
+                errors.push(`${src.name}: rss2json error`);
+                continue;
+              }
+              const items: FeedItem[] = rssData.items.slice(0, 10);
               for (const it of items) {
                 try {
                   const exists = await airtableExists(baseId, token, it.link);
