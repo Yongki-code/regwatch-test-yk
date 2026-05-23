@@ -211,6 +211,27 @@ function Index() {
   const todayCount = data.filter((d) => d.date === today).length;
   const highCount = data.filter((d) => d.urgency === "High").length;
   const unreadCount = data.filter((d) => d.is_new).length;
+  const lastCollected = data.reduce((acc, d) => (d.date && d.date > acc ? d.date : acc), "");
+
+  const markRead = async (item: Item) => {
+    setSelected(item);
+    if (!item.is_new) return;
+    // Optimistic UI update
+    setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: false } : d)));
+    const base = localStorage.getItem(AIRTABLE_BASE_STORAGE) || "";
+    const token = localStorage.getItem(AIRTABLE_TOKEN_STORAGE) || "";
+    if (!base || !token) return;
+    try {
+      await fetch(`https://api.airtable.com/v0/${base}/regulatory_updates/${item.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { is_new: false } }),
+      });
+    } catch {
+      // Revert on failure
+      setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: true } : d)));
+    }
+  };
 
   return (
     <div className="flex min-h-screen text-slate-100" style={{ backgroundColor: "#0b1120" }}>
