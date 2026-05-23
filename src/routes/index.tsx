@@ -36,15 +36,6 @@ const mockData: Item[] = [
 
 const REGIONS = ["EU", "KR", "MDSAP"] as const;
 const DOC_TYPES = ["Guidance", "Draft Guidance", "행정예고", "Amendment", "Recall", "System Update"] as const;
-const SOURCES: { name: string; status: "정상" | "Delayed" | "오류" }[] = [
-  { name: "FDA", status: "정상" },
-  { name: "MFDS", status: "정상" },
-  { name: "EUR-Lex", status: "정상" },
-  { name: "MDCG", status: "정상" },
-  { name: "Health Canada", status: "Delayed" },
-  { name: "TGA", status: "정상" },
-  { name: "EUDAMED", status: "정상" },
-];
 
 const API_KEY_STORAGE = "ivd_claude_api_key";
 const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
@@ -59,8 +50,6 @@ const regionPill = (r: Item["region"]) => {
   if (r === "KR") return "bg-emerald-500/20 text-emerald-300";
   return "bg-violet-500/20 text-violet-300";
 };
-const statusDot = (s: string) =>
-  s === "정상" ? "bg-green-500" : s === "Delayed" ? "bg-amber-500" : "bg-red-500";
 
 async function callClaude(apiKey: string, item: Item): Promise<{ summary: string; ra_action: string }> {
   const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
@@ -211,6 +200,27 @@ function Index() {
   const todayCount = data.filter((d) => d.date === today).length;
   const highCount = data.filter((d) => d.urgency === "High").length;
   const unreadCount = data.filter((d) => d.is_new).length;
+  const lastCollected = data.reduce((acc, d) => (d.date && d.date > acc ? d.date : acc), "");
+
+  const markRead = async (item: Item) => {
+    setSelected(item);
+    if (!item.is_new) return;
+    // Optimistic UI update
+    setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: false } : d)));
+    const base = localStorage.getItem(AIRTABLE_BASE_STORAGE) || "";
+    const token = localStorage.getItem(AIRTABLE_TOKEN_STORAGE) || "";
+    if (!base || !token) return;
+    try {
+      await fetch(`https://api.airtable.com/v0/${base}/regulatory_updates/${item.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { is_new: false } }),
+      });
+    } catch {
+      // Revert on failure
+      setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: true } : d)));
+    }
+  };
 
   return (
     <div className="flex min-h-screen text-slate-100" style={{ backgroundColor: "#0b1120" }}>
@@ -249,15 +259,16 @@ function Index() {
         </div>
 
         <div className="p-5">
-          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">소스 상태</h2>
-          <div className="space-y-2">
-            {SOURCES.map((s) => (
-              <div key={s.name} className="flex items-center gap-2 text-xs">
-                <span className={`w-2 h-2 rounded-full ${statusDot(s.status)}`} />
-                <span className="text-slate-200 flex-1">{s.name}</span>
-                <span className="text-slate-500">{s.status}</span>
-              </div>
-            ))}
+          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">수집 현황</h2>
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">마지막 수집</span>
+              <span className="text-slate-200">{lastCollected || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">누적 수집</span>
+              <span className="text-slate-200">{data.length}건</span>
+            </div>
           </div>
         </div>
 
@@ -322,7 +333,7 @@ function Index() {
           ) : (
             <>
               {filtered.map((item) => (
-                <Card key={item.id} item={item} onClick={() => setSelected(item)} />
+                <Card key={item.id} item={item} onClick={() => markRead(item)} />
               ))}
               {filtered.length === 0 && (
                 <div className="text-center text-slate-500 py-12 text-sm">조건에 맞는 업데이트가 없습니다.</div>
