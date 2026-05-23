@@ -8,10 +8,6 @@ type SourceCfg = {
 };
 
 const SOURCES: SourceCfg[] = [
-  { name: "TGA", url: "https://www.tga.gov.au/feeds/alert/safety-alerts.xml", agency: "TGA", region: "MDSAP", type: "Guidance" },
-  { name: "Health Canada", url: "https://www.canada.ca/content/dam/hc-sc/migration/hc-sc/rss/dhp-mps/devices-instruments-eng.xml", agency: "Health Canada", region: "MDSAP", type: "Guidance" },
-  { name: "FDA MedWatch", url: "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/medwatch/rss.xml", agency: "FDA", region: "MDSAP", type: "Guidance", isFda: true },
-  { name: "FDA Recalls", url: "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml", agency: "FDA", region: "MDSAP", type: "Recall", isFda: true },
   { name: "MDCG", url: "https://health.ec.europa.eu/node/12916/rss_en", agency: "MDCG", region: "EU", type: "Guidance" },
 ];
 
