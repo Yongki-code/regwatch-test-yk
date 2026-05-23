@@ -344,7 +344,7 @@ function Index() {
           ) : (
             <>
               {filtered.map((item) => (
-                <Card key={item.id} item={item} onClick={() => setSelected(item)} />
+                <Card key={item.id} item={item} onClick={() => markRead(item)} />
               ))}
               {filtered.length === 0 && (
                 <div className="text-center text-slate-500 py-12 text-sm">조건에 맞는 업데이트가 없습니다.</div>
