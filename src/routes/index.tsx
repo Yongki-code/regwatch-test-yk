@@ -249,15 +249,16 @@ function Index() {
         </div>
 
         <div className="p-5">
-          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">소스 상태</h2>
-          <div className="space-y-2">
-            {SOURCES.map((s) => (
-              <div key={s.name} className="flex items-center gap-2 text-xs">
-                <span className={`w-2 h-2 rounded-full ${statusDot(s.status)}`} />
-                <span className="text-slate-200 flex-1">{s.name}</span>
-                <span className="text-slate-500">{s.status}</span>
-              </div>
-            ))}
+          <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">수집 현황</h2>
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">마지막 수집</span>
+              <span className="text-slate-200">{lastCollected || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">누적 수집</span>
+              <span className="text-slate-200">{data.length}건</span>
+            </div>
           </div>
         </div>
 
