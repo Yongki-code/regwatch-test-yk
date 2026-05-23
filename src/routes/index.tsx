@@ -50,8 +50,6 @@ const regionPill = (r: Item["region"]) => {
   if (r === "KR") return "bg-emerald-500/20 text-emerald-300";
   return "bg-violet-500/20 text-violet-300";
 };
-const statusDot = (s: string) =>
-  s === "정상" ? "bg-green-500" : s === "Delayed" ? "bg-amber-500" : "bg-red-500";
 
 async function callClaude(apiKey: string, item: Item): Promise<{ summary: string; ra_action: string }> {
   const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
