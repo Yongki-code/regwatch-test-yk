@@ -36,15 +36,6 @@ const mockData: Item[] = [
 
 const REGIONS = ["EU", "KR", "MDSAP"] as const;
 const DOC_TYPES = ["Guidance", "Draft Guidance", "행정예고", "Amendment", "Recall", "System Update"] as const;
-const SOURCES: { name: string; status: "정상" | "Delayed" | "오류" }[] = [
-  { name: "FDA", status: "정상" },
-  { name: "MFDS", status: "정상" },
-  { name: "EUR-Lex", status: "정상" },
-  { name: "MDCG", status: "정상" },
-  { name: "Health Canada", status: "Delayed" },
-  { name: "TGA", status: "정상" },
-  { name: "EUDAMED", status: "정상" },
-];
 
 const API_KEY_STORAGE = "ivd_claude_api_key";
 const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
