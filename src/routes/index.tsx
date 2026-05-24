@@ -342,11 +342,10 @@ function Index() {
           </div>
         )}
 
-        <div className="px-8 pt-5 grid grid-cols-4 gap-3">
+        <div className="px-8 pt-5 grid grid-cols-3 gap-3">
           <MetricCard label="오늘 수집" value={String(todayCount)} />
           <MetricCard label="이번 주 High" value={String(highCount)} accent="#ef4444" />
           <MetricCard label="미열람" value={String(unreadCount)} accent="#f59e0b" />
-          <MetricCard label="소스 상태" value="7/7 정상" accent="#22c55e" />
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-5 space-y-3">
