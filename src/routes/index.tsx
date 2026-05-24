@@ -192,6 +192,22 @@ function Index() {
     setter(next);
   };
 
+  const availableRegions = useMemo(
+    () => Array.from(new Set(data.map((d) => d.region).filter(Boolean))).sort(),
+    [data]
+  );
+  const availableTypes = useMemo(
+    () => Array.from(new Set(data.map((d) => d.type).filter(Boolean))).sort(),
+    [data]
+  );
+
+  useEffect(() => {
+    setRegions((prev) => (prev.size === 0 ? new Set(availableRegions) : prev));
+  }, [availableRegions]);
+  useEffect(() => {
+    setTypes((prev) => (prev.size === 0 ? new Set(availableTypes) : prev));
+  }, [availableTypes]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     return data.filter(
