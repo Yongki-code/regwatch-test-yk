@@ -274,7 +274,10 @@ function Index() {
         <div className="p-5 border-b border-slate-800">
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">문서 유형</h2>
           <div className="space-y-2">
-            {DOC_TYPES.map((t) => (
+            {availableTypes.length === 0 && (
+              <p className="text-xs text-slate-500">데이터 없음</p>
+            )}
+            {availableTypes.map((t) => (
               <label key={t} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                 <input type="checkbox" checked={types.has(t)} onChange={() => toggle(types, t, setTypes)} className="accent-indigo-500" />
                 {t}
