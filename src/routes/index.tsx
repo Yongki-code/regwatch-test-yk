@@ -34,8 +34,6 @@ const mockData: Item[] = [
   { id: "10", region: "EU", agency: "MDCG", date: "2026-04-30", tag: "IVDR", type: "Guidance", urgency: "Medium", title: "MDCG 2026-2 Questions and Answers on IVDR Transitional Provisions", summary: "IVDR 전환 조항 Q&A 업데이트. 레거시 IVD 판매 지속 조건 및 인증 기관 전환 요건 명확화.", ra_action: "레거시 IVD 제품별 IVDR 전환 일정 재확인. 인증기관(NB) 심사 예약 현황 점검.", source_url: "https://health.ec.europa.eu", is_new: false },
 ];
 
-const REGIONS = ["EU", "KR", "MDSAP"] as const;
-const DOC_TYPES = ["Guidance", "Draft Guidance", "행정예고", "Amendment", "Recall", "System Update"] as const;
 
 const API_KEY_STORAGE = "ivd_claude_api_key";
 const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
