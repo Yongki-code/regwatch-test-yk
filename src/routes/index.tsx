@@ -120,8 +120,8 @@ async function fetchAirtable(baseId: string, token: string): Promise<Item[]> {
 }
 
 function Index() {
-  const [regions, setRegions] = useState<Set<string>>(new Set(REGIONS));
-  const [types, setTypes] = useState<Set<string>>(new Set(DOC_TYPES));
+  const [regions, setRegions] = useState<Set<string>>(new Set());
+  const [types, setTypes] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
