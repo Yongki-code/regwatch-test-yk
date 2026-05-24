@@ -70,8 +70,8 @@ async function callClaude(apiKey: string, title: string, agency: string, isFda: 
 반드시 아래 JSON 형식만 반환하라:
 {
   "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
-  "summary": "핵심 내용 100자 이내 한국어 요약",
-  "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어",
+  "summary": "아래 항목을 포함하여 500자 이내 한국어로 작성: 1)규제 배경 및 목적 2)핵심 변경사항 또는 요건 3)적용 대상 제품군 4)시행일 또는 전환 기간",
+  "ra_action": "자사 IVD 제품 관점에서 아래 항목을 포함하여 5줄 이내 한국어로 작성: 1)즉각 검토 필요 사항 2)기술문서 또는 인허가 영향 3)후속 모니터링 필요 사항",
   "urgency": "High 또는 Medium 또는 Low"
 }
 
@@ -89,7 +89,7 @@ urgency 판단 기준:
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 500,
+      max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
