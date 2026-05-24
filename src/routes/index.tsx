@@ -49,15 +49,23 @@ const regionPill = (r: Item["region"]) => {
   return "bg-violet-500/20 text-violet-300";
 };
 
-async function callClaude(apiKey: string, item: Item): Promise<{ summary: string; ra_action: string }> {
+async function callClaude(apiKey: string, item: Item): Promise<{ type: string; summary: string; ra_action: string; urgency: string }> {
   const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
 제목: ${item.title}
 기관: ${item.agency}
-유형: ${item.type}
-지역: ${item.region}
 
-다음 JSON 형식으로만 응답하라 (다른 텍스트 없이):
-{"summary": "핵심 내용 100자 이내 요약", "ra_action": "자사 IVD 제품 대응 조치 1~3줄"}`;
+반드시 아래 JSON 형식만 반환하라:
+{
+  "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
+  "summary": "핵심 내용 100자 이내 한국어 요약",
+  "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어",
+  "urgency": "High 또는 Medium 또는 Low"
+}
+
+urgency 판단 기준:
+- High: 즉각적인 인허가 대응 또는 제품 변경이 필요한 규제
+- Medium: 모니터링 및 내부 검토가 필요한 규제
+- Low: 당장 대응 불필요, 참고 수준`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
