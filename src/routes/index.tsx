@@ -34,8 +34,6 @@ const mockData: Item[] = [
   { id: "10", region: "EU", agency: "MDCG", date: "2026-04-30", tag: "IVDR", type: "Guidance", urgency: "Medium", title: "MDCG 2026-2 Questions and Answers on IVDR Transitional Provisions", summary: "IVDR 전환 조항 Q&A 업데이트. 레거시 IVD 판매 지속 조건 및 인증 기관 전환 요건 명확화.", ra_action: "레거시 IVD 제품별 IVDR 전환 일정 재확인. 인증기관(NB) 심사 예약 현황 점검.", source_url: "https://health.ec.europa.eu", is_new: false },
 ];
 
-const REGIONS = ["EU", "KR", "MDSAP"] as const;
-const DOC_TYPES = ["Guidance", "Draft Guidance", "행정예고", "Amendment", "Recall", "System Update"] as const;
 
 const API_KEY_STORAGE = "ivd_claude_api_key";
 const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
@@ -51,15 +49,23 @@ const regionPill = (r: Item["region"]) => {
   return "bg-violet-500/20 text-violet-300";
 };
 
-async function callClaude(apiKey: string, item: Item): Promise<{ summary: string; ra_action: string }> {
+async function callClaude(apiKey: string, item: Item): Promise<{ type: string; summary: string; ra_action: string; urgency: string }> {
   const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
 제목: ${item.title}
 기관: ${item.agency}
-유형: ${item.type}
-지역: ${item.region}
 
-다음 JSON 형식으로만 응답하라 (다른 텍스트 없이):
-{"summary": "핵심 내용 100자 이내 요약", "ra_action": "자사 IVD 제품 대응 조치 1~3줄"}`;
+반드시 아래 JSON 형식만 반환하라:
+{
+  "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
+  "summary": "핵심 내용 100자 이내 한국어 요약",
+  "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어",
+  "urgency": "High 또는 Medium 또는 Low"
+}
+
+urgency 판단 기준:
+- High: 즉각적인 인허가 대응 또는 제품 변경이 필요한 규제
+- Medium: 모니터링 및 내부 검토가 필요한 규제
+- Low: 당장 대응 불필요, 참고 수준`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -114,8 +120,8 @@ async function fetchAirtable(baseId: string, token: string): Promise<Item[]> {
 }
 
 function Index() {
-  const [regions, setRegions] = useState<Set<string>>(new Set(REGIONS));
-  const [types, setTypes] = useState<Set<string>>(new Set(DOC_TYPES));
+  const [regions, setRegions] = useState<Set<string>>(new Set());
+  const [types, setTypes] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -186,6 +192,22 @@ function Index() {
     setter(next);
   };
 
+  const availableRegions = useMemo(
+    () => Array.from(new Set(data.map((d) => d.region).filter(Boolean))).sort(),
+    [data]
+  );
+  const availableTypes = useMemo(
+    () => Array.from(new Set(data.map((d) => d.type).filter(Boolean))).sort(),
+    [data]
+  );
+
+  useEffect(() => {
+    setRegions((prev) => (prev.size === 0 ? new Set(availableRegions) : prev));
+  }, [availableRegions]);
+  useEffect(() => {
+    setTypes((prev) => (prev.size === 0 ? new Set(availableTypes) : prev));
+  }, [availableTypes]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     return data.filter(
@@ -237,7 +259,10 @@ function Index() {
         <div className="p-5 border-b border-slate-800">
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">지역 필터</h2>
           <div className="space-y-2">
-            {REGIONS.map((r) => (
+            {availableRegions.length === 0 && (
+              <p className="text-xs text-slate-500">데이터 없음</p>
+            )}
+            {availableRegions.map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                 <input type="checkbox" checked={regions.has(r)} onChange={() => toggle(regions, r, setRegions)} className="accent-indigo-500" />
                 {r}
@@ -249,7 +274,10 @@ function Index() {
         <div className="p-5 border-b border-slate-800">
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">문서 유형</h2>
           <div className="space-y-2">
-            {DOC_TYPES.map((t) => (
+            {availableTypes.length === 0 && (
+              <p className="text-xs text-slate-500">데이터 없음</p>
+            )}
+            {availableTypes.map((t) => (
               <label key={t} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                 <input type="checkbox" checked={types.has(t)} onChange={() => toggle(types, t, setTypes)} className="accent-indigo-500" />
                 {t}
@@ -314,11 +342,10 @@ function Index() {
           </div>
         )}
 
-        <div className="px-8 pt-5 grid grid-cols-4 gap-3">
+        <div className="px-8 pt-5 grid grid-cols-3 gap-3">
           <MetricCard label="오늘 수집" value={String(todayCount)} />
           <MetricCard label="이번 주 High" value={String(highCount)} accent="#ef4444" />
           <MetricCard label="미열람" value={String(unreadCount)} accent="#f59e0b" />
-          <MetricCard label="소스 상태" value="7/7 정상" accent="#22c55e" />
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-5 space-y-3">

@@ -68,7 +68,17 @@ async function callClaude(apiKey: string, title: string, agency: string, isFda: 
 기관: ${agency}
 
 반드시 아래 JSON 형식만 반환하라:
-{"summary": "핵심 내용 100자 이내 한국어 요약", "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어", "urgency": "High 또는 Medium 또는 Low"}${ivdNote}`;
+{
+  "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
+  "summary": "핵심 내용 100자 이내 한국어 요약",
+  "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어",
+  "urgency": "High 또는 Medium 또는 Low"
+}
+
+urgency 판단 기준:
+- High: 즉각적인 인허가 대응 또는 제품 변경이 필요한 규제
+- Medium: 모니터링 및 내부 검토가 필요한 규제
+- Low: 당장 대응 불필요, 참고 수준${ivdNote}`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -79,7 +89,7 @@ async function callClaude(apiKey: string, title: string, agency: string, isFda: 
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
+      max_tokens: 500,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -88,9 +98,11 @@ async function callClaude(apiKey: string, title: string, agency: string, isFda: 
   const text = data?.content?.[0]?.text ?? "";
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("Claude parse error");
-  const parsed = JSON.parse(m[0]) as { summary: string; ra_action: string; urgency: string };
+  const parsed = JSON.parse(m[0]) as { type?: string; summary: string; ra_action: string; urgency: string };
   const urgency = ["High", "Medium", "Low"].includes(parsed.urgency) ? parsed.urgency : "Low";
-  return { summary: parsed.summary, ra_action: parsed.ra_action, urgency };
+  const allowedTypes = ["Guidance", "Draft Guidance", "Amendment", "Recall", "행정예고", "System Update"];
+  const type = parsed.type && allowedTypes.includes(parsed.type) ? parsed.type : "";
+  return { type, summary: parsed.summary, ra_action: parsed.ra_action, urgency };
 }
 
 async function airtableExists(baseId: string, token: string, sourceUrl: string): Promise<boolean> {
@@ -147,11 +159,13 @@ async function main() {
           let summary = "";
           let ra_action = "";
           let urgency = "";
+          let type = src.type;
           if (claudeKey) {
             const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
             summary = ai.summary;
             ra_action = ai.ra_action;
             urgency = ai.urgency;
+            if (ai.type) type = ai.type;
           }
           await airtableCreate(baseId, token, {
             title: it.title,
@@ -159,8 +173,8 @@ async function main() {
             date: isoDate(it.pubDate),
             agency: src.agency,
             region: src.region,
-            type: src.type,
-            tag: src.type,
+            type,
+            tag: type,
             urgency,
             summary,
             ra_action,
