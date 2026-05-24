@@ -259,7 +259,10 @@ function Index() {
         <div className="p-5 border-b border-slate-800">
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">지역 필터</h2>
           <div className="space-y-2">
-            {REGIONS.map((r) => (
+            {availableRegions.length === 0 && (
+              <p className="text-xs text-slate-500">데이터 없음</p>
+            )}
+            {availableRegions.map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                 <input type="checkbox" checked={regions.has(r)} onChange={() => toggle(regions, r, setRegions)} className="accent-indigo-500" />
                 {r}
