@@ -159,11 +159,13 @@ async function main() {
           let summary = "";
           let ra_action = "";
           let urgency = "";
+          let type = src.type;
           if (claudeKey) {
             const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
             summary = ai.summary;
             ra_action = ai.ra_action;
             urgency = ai.urgency;
+            if (ai.type) type = ai.type;
           }
           await airtableCreate(baseId, token, {
             title: it.title,
@@ -171,8 +173,8 @@ async function main() {
             date: isoDate(it.pubDate),
             agency: src.agency,
             region: src.region,
-            type: src.type,
-            tag: src.type,
+            type,
+            tag: type,
             urgency,
             summary,
             ra_action,
