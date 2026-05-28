@@ -147,8 +147,8 @@ async function main() {
           let ra_action = "";
           let urgency = "";
           let type = src.type;
-          if (claudeKey) {
-            const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
+          if (openaiKey) {
+            const ai = await callOpenAI(openaiKey, it.title, src.agency, !!src.isFda);
             summary = ai.summary;
             ra_action = ai.ra_action;
             urgency = ai.urgency;
