@@ -168,7 +168,7 @@ async function main() {
             is_new: true,
           });
           collected++;
-          if (claudeKey) await sleep(1000);
+          if (openaiKey) await sleep(1000);
         } catch (e) {
           errors.push(`${src.name} item: ${(e as Error).message}`);
         }
