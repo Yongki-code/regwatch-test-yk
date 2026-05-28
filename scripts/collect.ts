@@ -59,50 +59,37 @@ function parseFeed(xml: string): FeedItem[] {
   return items;
 }
 
-async function callClaude(apiKey: string, title: string, agency: string, isFda: boolean) {
+async function callOpenAI(apiKey: string, title: string, agency: string, isFda: boolean) {
   const ivdNote = isFda
-    ? "\n\n주의: 이 항목이 IVD 또는 의료기기와 직접 관련 없으면 (예: 식품/약품) urgency를 'Low'로 설정하고 ra_action에 'IVD 직접 관련 없음 — 모니터링 유지'를 포함하라."
+    ? "\n\n주의: 이 항목이 IVD 또는 의료기기와 직접 관련 없으면 urgency를 'Low'로 설정하고 ra_action에 'IVD 직접 관련 없음 — 모니터링 유지'를 포함하라."
     : "";
   const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
 제목: ${title}
 기관: ${agency}
 
 반드시 아래 JSON 형식만 반환하라:
-{
-  "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
-  "summary": "아래 항목을 포함하여 500자 이내 한국어로 작성: 1)규제 배경 및 목적 2)핵심 변경사항 또는 요건 3)적용 대상 제품군 4)시행일 또는 전환 기간",
-  "ra_action": "자사 IVD 제품 관점에서 아래 항목을 포함하여 5줄 이내 한국어로 작성: 1)즉각 검토 필요 사항 2)기술문서 또는 인허가 영향 3)후속 모니터링 필요 사항",
-  "urgency": "High 또는 Medium 또는 Low"
-}
+{"type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update", "summary": "아래 항목을 포함하여 500자 이내 한국어로 작성: 1)규제 배경 및 목적 2)핵심 변경사항 또는 요건 3)적용 대상 제품군 4)시행일 또는 전환 기간", "ra_action": "자사 IVD 제품 관점에서 아래 항목을 포함하여 5줄 이내 한국어로 작성: 1)즉각 검토 필요 사항 2)기술문서 또는 인허가 영향 3)후속 모니터링 필요 사항", "urgency": "High 또는 Medium 또는 Low"}${ivdNote}`;
 
-urgency 판단 기준:
-- High: 즉각적인 인허가 대응 또는 제품 변경이 필요한 규제
-- Medium: 모니터링 및 내부 검토가 필요한 규제
-- Low: 당장 대응 불필요, 참고 수준${ivdNote}`;
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: "gpt-4o-mini",
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
-  if (!res.ok) throw new Error(`Claude ${res.status}`);
-  const data = (await res.json()) as { content?: { text?: string }[] };
-  const text = data?.content?.[0]?.text ?? "";
+  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const text = data?.choices?.[0]?.message?.content ?? "";
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("Claude parse error");
-  const parsed = JSON.parse(m[0]) as { type?: string; summary: string; ra_action: string; urgency: string };
+  if (!m) throw new Error("OpenAI parse error");
+  const parsed = JSON.parse(m[0]) as { type: string; summary: string; ra_action: string; urgency: string };
   const urgency = ["High", "Medium", "Low"].includes(parsed.urgency) ? parsed.urgency : "Low";
-  const allowedTypes = ["Guidance", "Draft Guidance", "Amendment", "Recall", "행정예고", "System Update"];
-  const type = parsed.type && allowedTypes.includes(parsed.type) ? parsed.type : "";
-  return { type, summary: parsed.summary, ra_action: parsed.ra_action, urgency };
+  return { type: parsed.type, summary: parsed.summary, ra_action: parsed.ra_action, urgency };
 }
 
 async function airtableExists(baseId: string, token: string, sourceUrl: string): Promise<boolean> {
@@ -131,7 +118,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main() {
   const baseId = process.env.AIRTABLE_BASE_ID || "";
   const token = process.env.AIRTABLE_TOKEN || "";
-  const claudeKey = process.env.CLAUDE_API_KEY || "";
+  const openaiKey = process.env.OPENAI_API_KEY || "";
 
   if (!baseId || !token) {
     console.error("Missing AIRTABLE_BASE_ID or AIRTABLE_TOKEN");
@@ -160,8 +147,8 @@ async function main() {
           let ra_action = "";
           let urgency = "";
           let type = src.type;
-          if (claudeKey) {
-            const ai = await callClaude(claudeKey, it.title, src.agency, !!src.isFda);
+          if (openaiKey) {
+            const ai = await callOpenAI(openaiKey, it.title, src.agency, !!src.isFda);
             summary = ai.summary;
             ra_action = ai.ra_action;
             urgency = ai.urgency;
@@ -181,7 +168,7 @@ async function main() {
             is_new: true,
           });
           collected++;
-          if (claudeKey) await sleep(1000);
+          if (openaiKey) await sleep(1000);
         } catch (e) {
           errors.push(`${src.name} item: ${(e as Error).message}`);
         }
