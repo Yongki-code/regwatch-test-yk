@@ -118,7 +118,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main() {
   const baseId = process.env.AIRTABLE_BASE_ID || "";
   const token = process.env.AIRTABLE_TOKEN || "";
-  const claudeKey = process.env.CLAUDE_API_KEY || "";
+  const openaiKey = process.env.OPENAI_API_KEY || "";
 
   if (!baseId || !token) {
     console.error("Missing AIRTABLE_BASE_ID or AIRTABLE_TOKEN");
