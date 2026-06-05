@@ -77,7 +77,7 @@ async function callOpenAI(apiKey: string, title: string, agency: string, isFda: 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-5.5",
+      model: "gpt-4o",
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     }),
