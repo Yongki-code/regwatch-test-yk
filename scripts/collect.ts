@@ -4,12 +4,9 @@ type SourceCfg = {
   agency: string;
   region: "EU" | "KR" | "MDSAP";
   type: string;
+  urlType: "rss" | "html";
   isFda?: boolean;
 };
-
-const SOURCES: SourceCfg[] = [
-  { name: "MDCG", url: "https://health.ec.europa.eu/node/12916/rss_en", agency: "MDCG", region: "EU", type: "Guidance" },
-];
 
 type FeedItem = { title: string; link: string; pubDate: string };
 
@@ -57,6 +54,39 @@ function parseFeed(xml: string): FeedItem[] {
     if (title && link) items.push({ title, link, pubDate });
   }
   return items;
+}
+
+async function extractItemsFromHtml(openaiKey: string, src: SourceCfg): Promise<FeedItem[]> {
+  const htmlRes = await fetch(`https://r.jina.ai/${encodeURIComponent(src.url)}`, {
+    headers: { "User-Agent": "IVD-RegWatch/1.0" },
+  });
+  if (!htmlRes.ok) throw new Error(`Jina ${htmlRes.status}`);
+  const pageText = await htmlRes.text();
+
+  const extractRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openaiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: `다음 웹페이지 내용에서 규제 관련 업데이트 항목을 최대 10개 추출하라.
+반드시 아래 JSON 배열 형식만 반환하라:
+[{"title": "항목 제목", "link": "항목 URL", "pubDate": "날짜(없으면 오늘)"}]
+웹페이지 내용:
+${pageText.slice(0, 3000)}`,
+      }],
+    }),
+  });
+  if (!extractRes.ok) throw new Error(`OpenAI extract ${extractRes.status}`);
+  const extractData = (await extractRes.json()) as { choices?: { message?: { content?: string } }[] };
+  const extractText = extractData?.choices?.[0]?.message?.content ?? "[]";
+  const match = extractText.match(/\[[\s\S]*\]/);
+  return match ? (JSON.parse(match[0]) as FeedItem[]) : [];
 }
 
 async function callOpenAI(apiKey: string, title: string, agency: string, isFda: boolean) {
@@ -113,6 +143,32 @@ async function airtableCreate(baseId: string, token: string, fields: Record<stri
   }
 }
 
+async function fetchSources(baseId: string, token: string): Promise<SourceCfg[]> {
+  const url = `https://api.airtable.com/v0/${baseId}/sources?filterByFormula=${encodeURIComponent("{active}=1")}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Airtable sources ${res.status}`);
+  const data = (await res.json()) as {
+    records: { fields: {
+      Name?: string; name?: string; url?: string; agency?: string;
+      region?: string; type?: string; url_type?: string;
+    } }[];
+  };
+  return data.records
+    .map((r) => {
+      const f = r.fields;
+      return {
+        name: f.Name || f.name || "",
+        url: f.url || "",
+        agency: f.agency || "",
+        region: (f.region || "MDSAP") as "EU" | "KR" | "MDSAP",
+        type: f.type || "Guidance",
+        urlType: ((f.url_type || "rss").toLowerCase() as "rss" | "html"),
+        isFda: f.agency === "FDA",
+      };
+    })
+    .filter((s) => s.url);
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
@@ -125,19 +181,32 @@ async function main() {
     process.exit(1);
   }
 
+  const SOURCES = await fetchSources(baseId, token);
+  console.log(`Loaded ${SOURCES.length} active sources from Airtable`);
+
   let collected = 0;
   let skipped = 0;
   const errors: string[] = [];
 
   for (const src of SOURCES) {
     try {
-      const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
-      if (!r.ok) {
-        errors.push(`${src.name}: fetch ${r.status}`);
-        continue;
+      let items: FeedItem[] = [];
+      if (src.urlType === "html") {
+        if (!openaiKey) {
+          errors.push(`${src.name}: HTML 추출에는 OPENAI_API_KEY 필요`);
+          continue;
+        }
+        items = (await extractItemsFromHtml(openaiKey, src)).slice(0, 10);
+      } else {
+        const r = await fetch(src.url, { headers: { "User-Agent": "IVD-RegWatch/1.0" } });
+        if (!r.ok) {
+          errors.push(`${src.name}: fetch ${r.status}`);
+          continue;
+        }
+        const xml = await r.text();
+        items = parseFeed(xml).slice(0, 10);
       }
-      const xml = await r.text();
-      const items = parseFeed(xml).slice(0, 10);
+
       for (const it of items) {
         try {
           const exists = await airtableExists(baseId, token, it.link);

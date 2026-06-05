@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { X, Search, Settings as SettingsIcon, Eye, EyeOff, Loader2 } from "lucide-react";
+import { X, Search, Settings as SettingsIcon, Eye, EyeOff, Loader2, Trash2, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -8,7 +8,7 @@ export const Route = createFileRoute("/")({
 
 type Item = {
   id: string;
-  region: "EU" | "KR" | "MDSAP";
+  region: string;
   agency: string;
   date: string;
   tag: string;
@@ -21,21 +21,19 @@ type Item = {
   is_new: boolean;
 };
 
-const mockData: Item[] = [
-  { id: "1", region: "EU", agency: "MDCG", date: "2026-05-15", tag: "IVDR", type: "Guidance", urgency: "High", title: "MDCG 2026-3 Guidance on performance studies for IVD devices under IVDR", summary: "IVDR 제61조에 따른 성능 연구 설계 및 보고 요건 최신 지침 발표. 레거시 IVD 전환 일정 명확화 포함.", ra_action: "레거시 IVD 제품 목록 재검토 후 성능 연구 계획 수립 필요. 2026년 5월 26일 전환 기한 재확인.", source_url: "https://health.ec.europa.eu", is_new: true },
-  { id: "2", region: "KR", agency: "MFDS", date: "2026-05-14", tag: "행정예고", type: "행정예고", urgency: "Medium", title: "체외진단의료기기 허가·심사 규정 일부개정고시(안) 행정예고", summary: "자가검사용 IVD 허가 요건 완화 및 디지털 결과 보고 의무화 내용 포함. 의견 제출 기한 2026.06.14.", ra_action: "개정안 검토 후 자사 자가검사 제품 허가 요건 변경 여부 확인. 의견 제출 여부 내부 결정 필요.", source_url: "https://www.mfds.go.kr", is_new: true },
-  { id: "3", region: "MDSAP", agency: "FDA", date: "2026-05-13", tag: "IVD", type: "Guidance", urgency: "Medium", title: "FDA Draft Guidance: Cybersecurity in IVD Software Functions", summary: "IVD 소프트웨어 기능의 사이버보안 요건 초안. 510(k) 제출 시 보안 설계 문서 추가 요구.", ra_action: "자사 IVD 소프트웨어 제품의 사이버보안 설계 문서 현황 파악. 초안 의견 제출 기한(60일) 캘린더 등록.", source_url: "https://www.fda.gov", is_new: true },
-  { id: "4", region: "EU", agency: "EUR-Lex", date: "2026-05-10", tag: "MDR", type: "Amendment", urgency: "High", title: "Commission Implementing Regulation (EU) 2026/734 amending Annex IX MDR", summary: "MDR Annex IX 기술문서 요건 개정. Class IIb 이상 제품 임상평가 계획 서식 변경.", ra_action: "Class IIb 이상 제품 기술문서 내 임상평가 계획 서식을 신규 양식으로 교체. 다음 갱신 주기에 반영.", source_url: "https://eur-lex.europa.eu", is_new: false },
-  { id: "5", region: "MDSAP", agency: "TGA", date: "2026-05-09", tag: "IVDR", type: "Guidance", urgency: "Low", title: "TGA Guidance: In vitro diagnostic devices — Australian requirements update 2026", summary: "호주 IVD 등록 요건 업데이트. ARTG 등록 갱신 절차 간소화 내용 포함.", ra_action: "호주 시장 IVD 제품 ARTG 갱신 일정 확인. 간소화된 절차 적용 대상 여부 검토.", source_url: "https://www.tga.gov.au", is_new: false },
-  { id: "6", region: "MDSAP", agency: "Health Canada", date: "2026-05-08", tag: "IVD", type: "Draft Guidance", urgency: "Medium", title: "Health Canada Draft: Updated IVD Device Licence Application Requirements", summary: "캐나다 IVD 허가 신청 요건 개정 초안. 분자진단 제품 분류 체계 변경 예고.", ra_action: "분자진단 제품 캐나다 허가 등급 재분류 대상 여부 검토. 초안 의견 제출 기한 확인.", source_url: "https://www.canada.ca", is_new: false },
-  { id: "7", region: "KR", agency: "MFDS", date: "2026-05-07", tag: "고시", type: "Amendment", urgency: "High", title: "의료기기 GMP 적합성인정 기준 개정 고시 시행", summary: "의료기기 GMP 인정 기준 개정 시행. ISO 13485:2016 기반 적합성 평가 강화.", ra_action: "현행 QMS 대비 개정 GMP 기준 GAP 분석 실시. 내부감사 계획에 신규 요건 반영.", source_url: "https://www.mfds.go.kr", is_new: false },
-  { id: "8", region: "EU", agency: "EUDAMED", date: "2026-05-05", tag: "System", type: "System Update", urgency: "Low", title: "EUDAMED Module UDI-DI: Mandatory use extended to Class I IVDs from June 2026", summary: "EUDAMED UDI-DI 모듈 Class I IVD 의무 등록 범위 확대. 2026년 6월 1일 시행.", ra_action: "자사 Class I IVD 제품 EUDAMED UDI-DI 등록 현황 점검. 미등록 제품 6월 1일 전 등록 완료.", source_url: "https://ec.europa.eu/tools/eudamed", is_new: false },
-  { id: "9", region: "MDSAP", agency: "FDA", date: "2026-05-03", tag: "Recall", type: "Recall", urgency: "High", title: "FDA Class II Recall: XYZ Glucose Monitoring System — Software Defect", summary: "혈당 모니터링 시스템 소프트웨어 오류로 인한 Class II 리콜. 유사 알고리즘 사용 IVD 영향 검토 권고.", ra_action: "자사 유사 소프트웨어 알고리즘 IVD 제품 점검. CAPA 필요 여부 내부 검토 후 RA팀 보고.", source_url: "https://www.fda.gov/safety/recalls", is_new: false },
-  { id: "10", region: "EU", agency: "MDCG", date: "2026-04-30", tag: "IVDR", type: "Guidance", urgency: "Medium", title: "MDCG 2026-2 Questions and Answers on IVDR Transitional Provisions", summary: "IVDR 전환 조항 Q&A 업데이트. 레거시 IVD 판매 지속 조건 및 인증 기관 전환 요건 명확화.", ra_action: "레거시 IVD 제품별 IVDR 전환 일정 재확인. 인증기관(NB) 심사 예약 현황 점검.", source_url: "https://health.ec.europa.eu", is_new: false },
-];
+type Source = {
+  id: string;
+  name: string;
+  url: string;
+  agency: string;
+  region: string;
+  type: string;
+  url_type: "rss" | "html";
+  active: boolean;
+};
 
+const mockData: Item[] = [];
 
-const API_KEY_STORAGE = "ivd_claude_api_key";
 const AIRTABLE_BASE_STORAGE = "ivd_airtable_base_id";
 const AIRTABLE_TOKEN_STORAGE = "ivd_airtable_token";
 
@@ -43,51 +41,11 @@ const urgencyColor = (u: Item["urgency"]) =>
   u === "High" ? "#ef4444" : u === "Medium" ? "#f59e0b" : "#64748b";
 const urgencyLabel = (u: Item["urgency"]) =>
   u === "High" ? "긴급" : u === "Medium" ? "보통" : "낮음";
-const regionPill = (r: Item["region"]) => {
+const regionPill = (r: string) => {
   if (r === "EU") return "bg-indigo-500/20 text-indigo-300";
   if (r === "KR") return "bg-emerald-500/20 text-emerald-300";
   return "bg-violet-500/20 text-violet-300";
 };
-
-async function callClaude(apiKey: string, item: Item): Promise<{ type: string; summary: string; ra_action: string; urgency: string }> {
-  const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
-제목: ${item.title}
-기관: ${item.agency}
-
-반드시 아래 JSON 형식만 반환하라:
-{
-  "type": "Guidance 또는 Draft Guidance 또는 Amendment 또는 Recall 또는 행정예고 또는 System Update",
-  "summary": "핵심 내용 100자 이내 한국어 요약",
-  "ra_action": "자사 IVD 제품 대응 조치 1~3줄 한국어",
-  "urgency": "High 또는 Medium 또는 Low"
-}
-
-urgency 판단 기준:
-- High: 즉각적인 인허가 대응 또는 제품 변경이 필요한 규제
-- Medium: 모니터링 및 내부 검토가 필요한 규제
-- Low: 당장 대응 불필요, 참고 수준`;
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  const text = data?.content?.[0]?.text ?? "";
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("parse");
-  return JSON.parse(match[0]);
-}
 
 type AirtableRecord = {
   id: string;
@@ -105,7 +63,7 @@ async function fetchAirtable(baseId: string, token: string): Promise<Item[]> {
   const data = (await res.json()) as { records: AirtableRecord[] };
   return data.records.map((r) => ({
     id: r.id,
-    region: (r.fields.region as Item["region"]) || "MDSAP",
+    region: r.fields.region || "MDSAP",
     agency: r.fields.agency || "",
     date: r.fields.date || "",
     tag: r.fields.tag || "",
@@ -119,36 +77,58 @@ async function fetchAirtable(baseId: string, token: string): Promise<Item[]> {
   }));
 }
 
+type SourceRecord = {
+  id: string;
+  fields: Partial<{
+    Name: string; name: string; url: string; agency: string;
+    region: string; type: string; url_type: string; active: boolean;
+  }>;
+};
+
+async function fetchSources(baseId: string, token: string): Promise<Source[]> {
+  const url = `https://api.airtable.com/v0/${baseId}/sources?maxRecords=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Airtable sources ${res.status}`);
+  const data = (await res.json()) as { records: SourceRecord[] };
+  return data.records.map((r) => ({
+    id: r.id,
+    name: r.fields.Name || r.fields.name || "",
+    url: r.fields.url || "",
+    agency: r.fields.agency || "",
+    region: r.fields.region || "",
+    type: r.fields.type || "",
+    url_type: ((r.fields.url_type || "rss").toLowerCase() as "rss" | "html"),
+    active: !!r.fields.active,
+  }));
+}
+
 function Index() {
   const [regions, setRegions] = useState<Set<string>>(new Set());
   const [types, setTypes] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [apiKey, setApiKey] = useState<string>("");
-  const [hasKey, setHasKey] = useState(false);
   const [airtableBase, setAirtableBase] = useState("");
   const [airtableToken, setAirtableToken] = useState("");
   const [airtableConnected, setAirtableConnected] = useState(false);
 
   const [data, setData] = useState<Item[]>(mockData);
+  const [sources, setSources] = useState<Source[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [usingMock, setUsingMock] = useState(true);
-
-  const [aiResult, setAiResult] = useState<{ summary: string; ra_action: string } | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(false);
 
   const loadAirtable = (base: string, token: string) => {
     if (!base || !token) {
       setData(mockData);
+      setSources([]);
       setUsingMock(true);
       return;
     }
     setDataLoading(true);
-    fetchAirtable(base, token)
-      .then((rows) => {
-        setData(rows.length ? rows : mockData);
+    Promise.all([fetchAirtable(base, token), fetchSources(base, token).catch(() => [])])
+      .then(([rows, srcs]) => {
+        setData(rows);
+        setSources(srcs);
         setUsingMock(rows.length === 0);
       })
       .catch(() => {
@@ -159,32 +139,12 @@ function Index() {
   };
 
   useEffect(() => {
-    const k = localStorage.getItem(API_KEY_STORAGE) || "";
     const b = localStorage.getItem(AIRTABLE_BASE_STORAGE) || "";
     const t = localStorage.getItem(AIRTABLE_TOKEN_STORAGE) || "";
-    setApiKey(k); setHasKey(!!k);
     setAirtableBase(b); setAirtableToken(t);
     setAirtableConnected(!!(b && t));
     loadAirtable(b, t);
   }, []);
-
-  useEffect(() => {
-    if (!selected) return;
-    setAiResult(null);
-    setAiError(false);
-    // If Airtable already provided a summary, prefer it without calling Claude
-    if (selected.summary && selected.ra_action) {
-      setAiResult({ summary: selected.summary, ra_action: selected.ra_action });
-      return;
-    }
-    const stored = localStorage.getItem(API_KEY_STORAGE);
-    if (!stored) return;
-    setAiLoading(true);
-    callClaude(stored, selected)
-      .then((r) => setAiResult(r))
-      .catch(() => setAiError(true))
-      .finally(() => setAiLoading(false));
-  }, [selected]);
 
   const toggle = (set: Set<string>, val: string, setter: (s: Set<string>) => void) => {
     const next = new Set(set);
@@ -192,9 +152,10 @@ function Index() {
     setter(next);
   };
 
+  // Regions come from active sources; types come from regulatory_updates
   const availableRegions = useMemo(
-    () => Array.from(new Set(data.map((d) => d.region).filter(Boolean))).sort(),
-    [data]
+    () => Array.from(new Set(sources.filter((s) => s.active).map((s) => s.region).filter(Boolean))).sort(),
+    [sources]
   );
   const availableTypes = useMemo(
     () => Array.from(new Set(data.map((d) => d.type).filter(Boolean))).sort(),
@@ -202,18 +163,18 @@ function Index() {
   );
 
   useEffect(() => {
-    setRegions((prev) => (prev.size === 0 ? new Set(availableRegions) : prev));
-  }, [availableRegions]);
+    setRegions(new Set(availableRegions));
+  }, [availableRegions.join("|")]);
   useEffect(() => {
-    setTypes((prev) => (prev.size === 0 ? new Set(availableTypes) : prev));
-  }, [availableTypes]);
+    setTypes(new Set(availableTypes));
+  }, [availableTypes.join("|")]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     return data.filter(
       (d) =>
-        regions.has(d.region) &&
-        types.has(d.type) &&
+        (regions.size === 0 || regions.has(d.region)) &&
+        (types.size === 0 || types.has(d.type)) &&
         (!q || d.title.toLowerCase().includes(q) || d.summary.toLowerCase().includes(q))
     );
   }, [data, regions, types, query]);
@@ -227,7 +188,6 @@ function Index() {
   const markRead = async (item: Item) => {
     setSelected(item);
     if (!item.is_new) return;
-    // Optimistic UI update
     setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: false } : d)));
     const base = localStorage.getItem(AIRTABLE_BASE_STORAGE) || "";
     const token = localStorage.getItem(AIRTABLE_TOKEN_STORAGE) || "";
@@ -239,14 +199,12 @@ function Index() {
         body: JSON.stringify({ fields: { is_new: false } }),
       });
     } catch {
-      // Revert on failure
       setData((prev) => prev.map((d) => (d.id === item.id ? { ...d, is_new: true } : d)));
     }
   };
 
   return (
     <div className="flex min-h-screen text-slate-100" style={{ backgroundColor: "#0b1120" }}>
-      {/* SIDEBAR */}
       <aside
         className="w-60 shrink-0 border-r border-slate-800 flex flex-col"
         style={{ backgroundColor: "#0f172a" }}
@@ -260,7 +218,7 @@ function Index() {
           <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">지역 필터</h2>
           <div className="space-y-2">
             {availableRegions.length === 0 && (
-              <p className="text-xs text-slate-500">데이터 없음</p>
+              <p className="text-xs text-slate-500">활성 소스 없음</p>
             )}
             {availableRegions.map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
@@ -302,10 +260,6 @@ function Index() {
 
         <div className="mt-auto p-5 border-t border-slate-800 space-y-3">
           <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${hasKey ? "bg-green-500" : "bg-slate-500"}`} />
-            <span className={hasKey ? "text-slate-200" : "text-slate-400"}>{hasKey ? "API 연결됨" : "API 미설정"}</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${airtableConnected ? "bg-green-500" : "bg-slate-500"}`} />
             <span className={airtableConnected ? "text-slate-200" : "text-slate-400"}>{airtableConnected ? "Airtable 연결됨" : "Airtable 미설정"}</span>
           </div>
@@ -319,7 +273,6 @@ function Index() {
         </div>
       </aside>
 
-      {/* CENTER */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="px-8 py-5 border-b border-slate-800 flex items-center gap-4">
           <h2 className="text-xl font-semibold text-white">최신 규제 업데이트</h2>
@@ -370,7 +323,6 @@ function Index() {
         </div>
       </main>
 
-      {/* SLIDE OVER */}
       {selected && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSelected(null)} />
@@ -391,11 +343,8 @@ function Index() {
                 </span>
               </div>
 
-              <DetailBox label="AI 요약" labelClass="text-indigo-300" bg="#1e1b4b" border="#6366f1"
-                hasKey={hasKey || !!selected.summary} loading={aiLoading} error={aiError} content={aiResult?.summary} />
-
-              <DetailBox label="RA ACTION" labelClass="text-amber-300" bg="#1a1200" border="#f59e0b"
-                hasKey={hasKey || !!selected.ra_action} loading={aiLoading} error={aiError} content={aiResult?.ra_action} />
+              <DetailBox label="AI 요약" labelClass="text-indigo-300" bg="#1e1b4b" border="#6366f1" content={selected.summary} />
+              <DetailBox label="RA ACTION" labelClass="text-amber-300" bg="#1a1200" border="#f59e0b" content={selected.ra_action} />
 
               <div className="mt-5">
                 <h4 className="text-sm font-semibold text-white mb-2">자사 영향 검토 포인트</h4>
@@ -415,18 +364,16 @@ function Index() {
         </>
       )}
 
-      {/* SETTINGS MODAL */}
       {settingsOpen && (
         <SettingsModal
-          initialKey={apiKey}
           initialBase={airtableBase}
           initialToken={airtableToken}
+          sources={sources}
+          onSourcesChange={setSources}
           onClose={() => setSettingsOpen(false)}
-          onSave={(k, b, t) => {
-            localStorage.setItem(API_KEY_STORAGE, k);
+          onSave={(b, t) => {
             localStorage.setItem(AIRTABLE_BASE_STORAGE, b);
             localStorage.setItem(AIRTABLE_TOKEN_STORAGE, t);
-            setApiKey(k); setHasKey(!!k);
             setAirtableBase(b); setAirtableToken(t);
             setAirtableConnected(!!(b && t));
             loadAirtable(b, t);
@@ -438,69 +385,38 @@ function Index() {
 }
 
 function DetailBox({
-  label, labelClass, bg, border, hasKey, loading, error, content,
+  label, labelClass, bg, border, content,
 }: {
-  label: string; labelClass: string; bg: string; border: string;
-  hasKey: boolean; loading: boolean; error: boolean; content?: string;
+  label: string; labelClass: string; bg: string; border: string; content?: string;
 }) {
   return (
     <div className="mt-5 p-4 rounded-md border-l-4 min-h-[80px]" style={{ backgroundColor: bg, borderLeftColor: border }}>
       <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelClass}`}>{label}</div>
-      {!hasKey ? (
-        <p className="text-sm text-slate-400 italic text-center py-2">
-          Claude API 키를 설정하면 AI 요약 및 RA Action 기능을 사용할 수 있습니다
-        </p>
-      ) : loading ? (
-        <div className="flex items-center justify-center py-3">
-          <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
-        </div>
-      ) : error ? (
-        <p className="text-sm text-red-400">요약 생성 중 오류가 발생했습니다. API 키를 확인해 주세요.</p>
-      ) : (
+      {content ? (
         <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-line">{content}</p>
+      ) : (
+        <p className="text-sm text-slate-400 italic text-center py-2">내용이 없습니다</p>
       )}
     </div>
   );
 }
 
 function SettingsModal({
-  initialKey, initialBase, initialToken, onClose, onSave,
+  initialBase, initialToken, sources, onSourcesChange, onClose, onSave,
 }: {
-  initialKey: string; initialBase: string; initialToken: string;
-  onClose: () => void; onSave: (k: string, b: string, t: string) => void;
+  initialBase: string; initialToken: string;
+  sources: Source[];
+  onSourcesChange: (s: Source[]) => void;
+  onClose: () => void; onSave: (b: string, t: string) => void;
 }) {
-  const [val, setVal] = useState(initialKey);
   const [base, setBase] = useState(initialBase);
   const [token, setToken] = useState(initialToken);
-  const [show, setShow] = useState(false);
   const [showToken, setShowToken] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<null | "ok" | "fail">(null);
 
   const [collecting, setCollecting] = useState(false);
   const [collectMsg, setCollectMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const test = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": val,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 8, messages: [{ role: "user", content: "ping" }] }),
-      });
-      setTestResult(res.ok ? "ok" : "fail");
-    } catch {
-      setTestResult("fail");
-    } finally {
-      setTesting(false);
-    }
-  };
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const runCollect = async () => {
     setCollecting(true);
@@ -512,7 +428,6 @@ function SettingsModal({
           "Content-Type": "application/json",
           "x-airtable-base-id": base,
           "x-airtable-token": token,
-          "x-claude-api-key": val,
         },
       });
       const data = await res.json();
@@ -529,11 +444,49 @@ function SettingsModal({
     }
   };
 
+  const reloadSources = async () => {
+    if (!base || !token) return;
+    try {
+      const s = await fetchSources(base, token);
+      onSourcesChange(s);
+    } catch {/* ignore */}
+  };
+
+  const toggleActive = async (s: Source) => {
+    if (!base || !token) return;
+    const next = !s.active;
+    onSourcesChange(sources.map((x) => (x.id === s.id ? { ...x, active: next } : x)));
+    try {
+      await fetch(`https://api.airtable.com/v0/${base}/sources/${s.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { active: next } }),
+      });
+    } catch {
+      onSourcesChange(sources);
+    }
+  };
+
+  const deleteSource = async (s: Source) => {
+    if (!base || !token) return;
+    if (!confirm(`"${s.name}" 소스를 삭제하시겠습니까?`)) return;
+    const prev = sources;
+    onSourcesChange(sources.filter((x) => x.id !== s.id));
+    try {
+      await fetch(`https://api.airtable.com/v0/${base}/sources/${s.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      onSourcesChange(prev);
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
       <div
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-h-[90vh] overflow-y-auto z-50 rounded-lg border border-slate-700 p-6"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] max-h-[90vh] overflow-y-auto z-50 rounded-lg border border-slate-700 p-6"
         style={{ backgroundColor: "#0f172a" }}
       >
         <div className="flex items-center justify-between mb-5">
@@ -543,33 +496,7 @@ function SettingsModal({
           </button>
         </div>
 
-        <label className="block text-sm text-slate-200 mb-2">Claude API Key</label>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type={show ? "text" : "password"}
-              value={val}
-              onChange={(e) => { setVal(e.target.value); setTestResult(null); }}
-              placeholder="sk-ant-..."
-              className="w-full pl-3 pr-10 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
-              style={{ backgroundColor: "#111827" }}
-            />
-            <button type="button" onClick={() => setShow((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200">
-              {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <button onClick={test} disabled={!val || testing}
-            className="px-3 py-2 text-sm rounded-md border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
-            {testing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            테스트
-          </button>
-        </div>
-        {testResult === "ok" && <p className="mt-2 text-sm text-green-400">유효한 키입니다 ✓</p>}
-        {testResult === "fail" && <p className="mt-2 text-sm text-red-400">유효하지 않은 키입니다 ✗</p>}
-        <p className="mt-2 text-xs text-slate-400">미입력 시 RSS 원문만 수집됩니다. 입력 시 AI 요약·RA Action·긴급도가 자동 생성됩니다.</p>
-
-        <div className="mt-6 pt-6 border-t border-slate-800">
+        <div>
           <h4 className="text-sm font-semibold text-white mb-4">데이터 수집 설정</h4>
 
           <label className="block text-sm text-slate-200 mb-2">Airtable Base ID</label>
@@ -617,18 +544,169 @@ function SettingsModal({
           </div>
         </div>
 
+        {/* SOURCE MANAGEMENT */}
+        <div className="mt-6 pt-6 border-t border-slate-800">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-semibold text-white">수집 소스 관리</h4>
+            <button
+              onClick={() => setShowAddForm((v) => !v)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-slate-600 text-slate-100 hover:bg-slate-800"
+            >
+              <Plus className="w-3.5 h-3.5" /> 소스 추가
+            </button>
+          </div>
+
+          {showAddForm && (
+            <AddSourceForm
+              base={base}
+              token={token}
+              onCancel={() => setShowAddForm(false)}
+              onCreated={async () => {
+                setShowAddForm(false);
+                await reloadSources();
+              }}
+            />
+          )}
+
+          <div className="space-y-2 mt-3">
+            {sources.length === 0 && (
+              <p className="text-xs text-slate-500">등록된 소스가 없습니다.</p>
+            )}
+            {sources.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 p-3 rounded-md border border-slate-800" style={{ backgroundColor: "#111827" }}>
+                <button
+                  onClick={() => toggleActive(s)}
+                  className={`relative w-9 h-5 rounded-full transition-colors ${s.active ? "bg-indigo-500" : "bg-slate-600"}`}
+                  aria-label="toggle"
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${s.active ? "translate-x-4" : ""}`} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-white truncate">{s.name || s.agency || "(이름 없음)"}</div>
+                  <div className="text-xs text-slate-400 truncate">{s.agency}</div>
+                </div>
+                {s.region && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${regionPill(s.region)}`}>{s.region}</span>
+                )}
+                <span className="px-2 py-0.5 rounded-full text-xs bg-slate-700 text-slate-200 uppercase">{s.url_type}</span>
+                <button
+                  onClick={() => deleteSource(s)}
+                  className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800"
+                  aria-label="delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-6 flex justify-end gap-2">
           <button onClick={onClose}
             className="px-4 py-2 text-sm rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800">
             취소
           </button>
-          <button onClick={() => { onSave(val.trim(), base.trim(), token.trim()); onClose(); }}
+          <button onClick={() => { onSave(base.trim(), token.trim()); onClose(); }}
             className="px-4 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
             저장
           </button>
         </div>
       </div>
     </>
+  );
+}
+
+function AddSourceForm({
+  base, token, onCancel, onCreated,
+}: {
+  base: string; token: string; onCancel: () => void; onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [agency, setAgency] = useState("");
+  const [region, setRegion] = useState<"EU" | "KR" | "MDSAP">("EU");
+  const [type, setType] = useState("Guidance");
+  const [urlType, setUrlType] = useState<"rss" | "html">("rss");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!base || !token) { setErr("Airtable 연결이 필요합니다."); return; }
+    if (!name || !url) { setErr("이름과 URL은 필수입니다."); return; }
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch(`https://api.airtable.com/v0/${base}/sources`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fields: { Name: name, url, agency, region, type, url_type: urlType, active: true },
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`${res.status}: ${t}`);
+      }
+      onCreated();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const input = "w-full px-3 py-2 text-sm rounded-md border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500";
+
+  return (
+    <div className="p-4 rounded-md border border-slate-700 mb-2 space-y-3" style={{ backgroundColor: "#0b1120" }}>
+      <div>
+        <label className="block text-xs text-slate-300 mb-1">소스 이름</label>
+        <input className={input} style={{ backgroundColor: "#111827" }} value={name} onChange={(e) => setName(e.target.value)} placeholder="MDCG" />
+      </div>
+      <div>
+        <label className="block text-xs text-slate-300 mb-1">URL</label>
+        <input className={input} style={{ backgroundColor: "#111827" }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-300 mb-1">기관명</label>
+          <input className={input} style={{ backgroundColor: "#111827" }} value={agency} onChange={(e) => setAgency(e.target.value)} placeholder="MDCG" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-300 mb-1">지역</label>
+          <select className={input} style={{ backgroundColor: "#111827" }} value={region} onChange={(e) => setRegion(e.target.value as "EU" | "KR" | "MDSAP")}>
+            <option value="EU">EU</option>
+            <option value="KR">KR</option>
+            <option value="MDSAP">MDSAP</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-300 mb-1">문서 유형</label>
+        <input className={input} style={{ backgroundColor: "#111827" }} value={type} onChange={(e) => setType(e.target.value)} placeholder="Guidance" />
+      </div>
+      <div>
+        <label className="block text-xs text-slate-300 mb-2">URL 유형</label>
+        <div className="flex items-center gap-4 text-sm text-slate-200">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="radio" checked={urlType === "rss"} onChange={() => setUrlType("rss")} className="accent-indigo-500" />
+            RSS
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="radio" checked={urlType === "html"} onChange={() => setUrlType("html")} className="accent-indigo-500" />
+            HTML
+          </label>
+        </div>
+      </div>
+      {err && <p className="text-xs text-red-400">{err}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800">취소</button>
+        <button onClick={submit} disabled={saving}
+          className="px-3 py-1.5 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium disabled:opacity-50 flex items-center gap-2">
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          저장
+        </button>
+      </div>
+    </div>
   );
 }
 
