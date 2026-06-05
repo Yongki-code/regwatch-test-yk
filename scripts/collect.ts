@@ -154,7 +154,7 @@ async function airtableCreate(baseId: string, token: string, fields: Record<stri
 }
 
 async function fetchSources(baseId: string, token: string): Promise<SourceCfg[]> {
-  const url = `https://api.airtable.com/v0/${baseId}/sources?filterByFormula=${encodeURIComponent("{active}=1")}`;
+  const url = `https://api.airtable.com/v0/${baseId}/sources?filterByFormula=${encodeURIComponent("{active}=TRUE()")}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Airtable sources ${res.status}`);
   const data = (await res.json()) as {
