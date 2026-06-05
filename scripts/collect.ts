@@ -86,7 +86,7 @@ ${pageText.slice(0, 3000)}`,
   const extractData = (await extractRes.json()) as { choices?: { message?: { content?: string } }[] };
   const extractText = extractData?.choices?.[0]?.message?.content ?? "[]";
   const match = extractText.match(/\[[\s\S]*\]/);
-  return match ? (JSON.parse(match[0]) as FeedItem[]) : [];
+  const items = match ? (JSON.parse(match[0]) as FeedItem[]) : [];
   const baseUrl = new URL(src.url).origin;
   const fixed = items.map(it => ({...it, link: it.link.startsWith("http") ? it.link : `${baseUrl}${it.link.startsWith("/") ? "" : "/"}${it.link}`}));
   console.log(`[${src.name}] extracted ${fixed.length} items:`, JSON.stringify(fixed.slice(0, 3), null, 2));
