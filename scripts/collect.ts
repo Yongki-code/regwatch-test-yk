@@ -57,13 +57,15 @@ function parseFeed(xml: string): FeedItem[] {
 }
 
 async function extractItemsFromHtml(openaiKey: string, src: SourceCfg): Promise<FeedItem[]> {
-  const htmlRes = await fetch(`https://r.jina.ai/${src.url}`, {
-    headers: { "User-Agent": "IVD-RegWatch/1.0" },
+  const htmlRes = await fetch(src.url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; IVD-RegWatch/1.0)",
+      "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    },
   });
-  if (!htmlRes.ok) throw new Error(`Jina ${htmlRes.status}`);
+  if (!htmlRes.ok) throw new Error(`HTML fetch ${htmlRes.status}`);
   const pageText = await htmlRes.text();
-  console.log(`[${src.name}] Jina preview:`, pageText.slice(0, 500));
-
+  
   const extractRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
