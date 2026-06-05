@@ -79,7 +79,7 @@ async function extractItemsFromHtml(openaiKey: string, src: SourceCfg): Promise<
 반드시 아래 JSON 배열 형식만 반환하라:
 [{"title": "항목 제목", "link": "항목 URL", "pubDate": "날짜(없으면 오늘)"}]
 웹페이지 내용:
-${pageText.slice(0, 3000)}`,
+${pageText.slice(0, 8000)}`,
       }],
     }),
   });
