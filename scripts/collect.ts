@@ -93,7 +93,9 @@ async function callOpenAI(apiKey: string, title: string, agency: string, isFda: 
   const ivdNote = isFda
     ? "\n\n주의: 이 항목이 IVD 또는 의료기기와 직접 관련 없으면 urgency를 'Low'로 설정하고 ra_action에 'IVD 직접 관련 없음 — 모니터링 유지'를 포함하라."
     : "";
-  const prompt = `아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
+  const prompt = `반드시 JSON만 반환하라. 다른 텍스트, 설명, 마크다운 코드블록 없이 순수 JSON 객체만 출력하라.
+
+아래 의료기기 규제 문서를 IVD RA 전문가 관점에서 분석하라.
 제목: ${title}
 기관: ${agency}
 
