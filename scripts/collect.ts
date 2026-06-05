@@ -62,6 +62,7 @@ async function extractItemsFromHtml(openaiKey: string, src: SourceCfg): Promise<
   });
   if (!htmlRes.ok) throw new Error(`Jina ${htmlRes.status}`);
   const pageText = await htmlRes.text();
+  console.log(`[${src.name}] Jina preview:`, pageText.slice(0, 500));
 
   const extractRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -85,6 +86,7 @@ ${pageText.slice(0, 3000)}`,
   if (!extractRes.ok) throw new Error(`OpenAI extract ${extractRes.status}`);
   const extractData = (await extractRes.json()) as { choices?: { message?: { content?: string } }[] };
   const extractText = extractData?.choices?.[0]?.message?.content ?? "[]";
+  console.log(`[${src.name}] OpenAI raw:`, extractText.slice(0, 500));
   const match = extractText.match(/\[[\s\S]*\]/);
   const items = match ? (JSON.parse(match[0]) as FeedItem[]) : [];
   const baseUrl = new URL(src.url).origin;
