@@ -57,7 +57,7 @@ function parseFeed(xml: string): FeedItem[] {
 }
 
 async function extractItemsFromHtml(openaiKey: string, src: SourceCfg): Promise<FeedItem[]> {
-  const htmlRes = await fetch(`https://r.jina.ai/${encodeURIComponent(src.url)}`, {
+  const htmlRes = await fetch(`https://r.jina.ai/${src.url}`, {
     headers: { "User-Agent": "IVD-RegWatch/1.0" },
   });
   if (!htmlRes.ok) throw new Error(`Jina ${htmlRes.status}`);
